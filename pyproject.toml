@@ -42,6 +42,12 @@ paradigm_generator = "latincy_lexicon.spacy:create_paradigm_generator"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/latincy_lexicon"]
+exclude = [
+    "src/latincy_lexicon/db",
+    "src/latincy_lexicon/export",
+    "src/latincy_lexicon/align/headword.py",
+    "src/latincy_lexicon/align/report.py",
+]
 
 [tool.ruff]
 line-length = 88

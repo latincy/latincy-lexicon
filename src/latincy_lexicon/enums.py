@@ -243,3 +243,23 @@ class TrickClass(StrEnum):
     SYNCOPE = "SYNCOPE"
     ARCHAIC = "ARCHAIC"
     SLUR = "SLUR"
+
+
+WORDS_TO_UD_POS: dict[str, set[str]] = {
+    "N": {"NOUN", "PROPN"},
+    "V": {"VERB", "AUX"},
+    "ADJ": {"ADJ"},
+    "ADV": {"ADV"},
+    "PREP": {"ADP"},
+    "CONJ": {"CCONJ", "SCONJ"},
+    "INTERJ": {"INTJ"},
+    "PRON": {"PRON", "DET"},
+    "PACK": {"PRON", "DET"},
+    "NUM": {"NUM"},
+    "VPAR": {"VERB", "ADJ"},
+    "SUPINE": {"VERB"},
+    "PREFIX": {"X"},
+    "SUFFIX": {"X"},
+    "TACKON": {"CCONJ", "SCONJ", "PART", "ADV"},
+    "X": set(),
+}

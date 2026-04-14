@@ -52,3 +52,12 @@ vendor/
 data/db/
 data/json/
 data/raw/
+
+# Dev-only modules (kept locally, excluded from published wheel)
+src/latincy_lexicon/db/
+src/latincy_lexicon/export/
+src/latincy_lexicon/align/headword.py
+src/latincy_lexicon/align/report.py
+tests/test_db/
+tests/test_export/
+tests/test_align/test_headword.py

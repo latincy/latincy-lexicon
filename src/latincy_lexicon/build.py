@@ -635,7 +635,7 @@ def _export_lexicon(
     Without alignment data, all entries are keyed by normalized headword
     (match_type='self'). This is the no-external-dependency path.
     """
-    from latincy_lexicon.export.json_export import WORDS_TO_UD_POS
+    from latincy_lexicon.enums import WORDS_TO_UD_POS
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
