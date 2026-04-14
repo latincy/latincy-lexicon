@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "latincy-lexicon"
+version = "0.1.0"
+description = "Whitaker's Words lexical data for LatinCy"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "Patrick Burns", email = "patrick@diyclassics.org"}
+]
+keywords = ["latin", "nlp", "lexicon", "whitakers-words", "spacy"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Linguistic",
+    "Natural Language :: Latin",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+spacy = ["spacy>=3.5.0"]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+latincy-lexicon = "latincy_lexicon.cli:main"
+
+[project.entry-points."spacy_factories"]
+whitakers_words = "latincy_lexicon.spacy:create_whitakers_words"
+paradigm_generator = "latincy_lexicon.spacy:create_paradigm_generator"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/latincy_lexicon"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
