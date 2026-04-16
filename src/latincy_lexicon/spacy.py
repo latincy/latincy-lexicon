@@ -72,7 +72,12 @@ class WhitakersWords:
         self._nlp = nlp
         self._lexicon: dict = {}
         self._analyzer = None
+        self._lexicon_path = lexicon_path
         self._analyzer_path = analyzer_path
+        # `_loaded` is True once any configured paths have been read into
+        # memory. Lazy so that pipelines that merely inspect `nlp.pipe_names`
+        # or round-trip via to_disk/from_disk don't pay the ~500ms load cost.
+        self._loaded = not (lexicon_path or analyzer_path)
         self._warned = False
 
         if not Token.has_extension("lexicon"):
@@ -82,10 +87,14 @@ class WhitakersWords:
         if not Token.has_extension("gloss"):
             Token.set_extension("gloss", default=None)
 
-        if lexicon_path:
-            self._load_lexicon(lexicon_path)
-        if analyzer_path:
-            self._load_analyzer(analyzer_path)
+    def _ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        if self._lexicon_path and not self._lexicon:
+            self._load_lexicon(self._lexicon_path)
+        if self._analyzer_path and self._analyzer is None:
+            self._load_analyzer(self._analyzer_path)
+        self._loaded = True
 
     def _load_lexicon(self, path) -> None:
         with open(path) as f:
@@ -132,6 +141,7 @@ class WhitakersWords:
                 )
 
     def __call__(self, doc: Doc) -> Doc:
+        self._ensure_loaded()
         self._check_pipeline_position()
 
         for token in doc:
@@ -164,6 +174,8 @@ class WhitakersWords:
         return doc
 
     def to_disk(self, path: str, *, exclude: tuple = ()) -> None:
+        # Force load so the lexicon bytes are available for copy-out.
+        self._ensure_loaded()
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         cfg: dict = {}
@@ -180,16 +192,21 @@ class WhitakersWords:
         path = Path(path)
         lexicon_file = path / "lexicon.json"
         if lexicon_file.exists():
-            self._load_lexicon(lexicon_file)
+            # Defer the actual json.load until first __call__.
+            self._lexicon_path = str(lexicon_file)
+            self._loaded = False
         config_file = path / "ww_config.json"
         if config_file.exists():
             with open(config_file) as f:
                 cfg = json.load(f)
             if cfg.get("analyzer_path"):
-                self._load_analyzer(cfg["analyzer_path"])
+                self._analyzer_path = cfg["analyzer_path"]
+                self._loaded = False
         return self
 
     def to_bytes(self, *, exclude: tuple = ()) -> bytes:
+        # Force load so the lexicon dict is in memory for embedding.
+        self._ensure_loaded()
         data: dict = {}
         if self._lexicon:
             data["lexicon"] = self._lexicon
@@ -201,9 +218,12 @@ class WhitakersWords:
         if data:
             d = json.loads(data.decode("utf-8"))
             if "lexicon" in d:
+                # Already in memory; no path to defer.
                 self._lexicon = d["lexicon"]
+                self._lexicon_path = None
             if d.get("analyzer_path"):
-                self._load_analyzer(d["analyzer_path"])
+                self._analyzer_path = d["analyzer_path"]
+                self._loaded = False
         return self
 
 
@@ -290,14 +310,18 @@ class ParadigmGenerator:
         if not Token.has_extension("reinflect"):
             Token.set_extension("reinflect", method=_reinflect_method)
 
-        if analyzer_path:
-            self._load_generator(analyzer_path)
+        # Generator is loaded lazily on first __call__ — see _ensure_loaded.
+
+    def _ensure_loaded(self) -> None:
+        if self._generator is None and self._analyzer_path:
+            self._load_generator(self._analyzer_path)
 
     def _load_generator(self, path: str) -> None:
         from latincy_lexicon.generator import Generator
         self._generator = Generator.from_json(path)
 
     def __call__(self, doc: Doc) -> Doc:
+        self._ensure_loaded()
         if self._generator is None:
             return doc
 
@@ -341,7 +365,8 @@ class ParadigmGenerator:
             with open(config_file) as f:
                 cfg = json.load(f)
             if cfg.get("analyzer_path"):
-                self._load_generator(cfg["analyzer_path"])
+                # Defer the actual Generator.from_json() until first __call__.
+                self._analyzer_path = cfg["analyzer_path"]
         return self
 
     def to_bytes(self, *, exclude: tuple = ()) -> bytes:
@@ -353,7 +378,8 @@ class ParadigmGenerator:
         if data:
             cfg = json.loads(data.decode("utf-8"))
             if cfg.get("analyzer_path"):
-                self._load_generator(cfg["analyzer_path"])
+                # Defer the actual Generator.from_json() until first __call__.
+                self._analyzer_path = cfg["analyzer_path"]
         return self
 
 
