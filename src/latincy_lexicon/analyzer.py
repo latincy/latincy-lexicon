@@ -190,20 +190,22 @@ class Analyzer:
         headwords: dict[int, str],
     ) -> None:
         """Build in-memory lookup structures from raw data."""
-        # Cache: ending → list of inflection dicts
+        # Cache: ending → list of inflection dicts.
+        # `ending` is lowercased at the build-time trust boundary
+        # (build.py::_export_analyzer, db/loader.py consumes pre-lowercased
+        # parser output), so no per-row .lower() is needed here.
         self._endings: dict[str, list[dict]] = {}
         for r in inflections:
-            ending = r["ending"].lower()
-            self._endings.setdefault(ending, []).append(r)
+            self._endings.setdefault(r["ending"], []).append(r)
 
         if "" not in self._endings:
             self._endings[""] = []
 
-        # Cache: form → list of unique dicts
+        # Cache: form → list of unique dicts. `form` is pre-lowercased
+        # for the same reason as `ending` above.
         self._uniques: dict[str, list[dict]] = {}
         for r in uniques:
-            form = r["form"].lower()
-            self._uniques.setdefault(form, []).append(r)
+            self._uniques.setdefault(r["form"], []).append(r)
 
         # Tackons for enclitic stripping
         self._tackons = tackons

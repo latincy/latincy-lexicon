@@ -565,27 +565,35 @@ def _export_analyzer(
     """Write analyzer.json from in-memory data."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Strip fields the analyzer doesn't need from inflections
+    # Strip fields the analyzer doesn't need from inflections.
+    # Lowercase `ending` here so Analyzer._build_caches can index directly
+    # without per-row .lower() calls at load time.
     inf_out = []
     for inf in inflections:
-        inf_out.append({
+        row = {
             k: inf[k] for k in (
                 "pos", "decl_which", "decl_var", "stem_key", "ending",
                 "case_val", "number", "gender", "tense", "voice", "mood",
                 "person", "comparison", "numeral_sort", "age", "freq",
             ) if k in inf
-        })
+        }
+        if "ending" in row and row["ending"]:
+            row["ending"] = row["ending"].lower()
+        inf_out.append(row)
 
-    # Strip fields from uniques
+    # Strip fields from uniques. Lowercase `form` for same reason as above.
     uni_out = []
     for u in uniques:
-        uni_out.append({
+        row = {
             k: u[k] for k in (
                 "form", "pos", "decl_which", "decl_var",
                 "case_val", "number", "gender", "tense", "voice", "mood",
                 "person", "comparison", "meaning",
             ) if k in u
-        })
+        }
+        if "form" in row and row["form"]:
+            row["form"] = row["form"].lower()
+        uni_out.append(row)
 
     tackons = sorted(
         [a["fix"].lower() for a in addons if a["addon_type"] == "TACKON"],
