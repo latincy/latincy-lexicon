@@ -4,6 +4,8 @@ Standalone reimplementation of latincy-words/scripts/utils/normalize.py.
 No external dependencies.
 """
 
+_VJ_TRANS = str.maketrans("vjVJ", "uiUI")
+
 
 def normalize_latin(text: str) -> str:
     """Normalize v→u, j→i in Latin text (all cases), then lowercase.
@@ -20,13 +22,7 @@ def normalize_latin(text: str) -> str:
     """
     if not text:
         return text
-    return (
-        text.replace("v", "u")
-        .replace("j", "i")
-        .replace("V", "U")
-        .replace("J", "I")
-        .lower()
-    )
+    return text.translate(_VJ_TRANS).lower()
 
 
 def normalize_vj(text: str) -> str:
@@ -40,9 +36,4 @@ def normalize_vj(text: str) -> str:
     """
     if not text:
         return text
-    return (
-        text.replace("v", "u")
-        .replace("j", "i")
-        .replace("V", "U")
-        .replace("J", "I")
-    )
+    return text.translate(_VJ_TRANS)
