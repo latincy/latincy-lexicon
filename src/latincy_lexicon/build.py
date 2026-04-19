@@ -11,6 +11,7 @@ from importlib import resources
 from pathlib import Path
 
 from latincy_lexicon.align.normalize import normalize_latin
+from latincy_lexicon.glosses import split_glosses
 from latincy_lexicon.models import DictEntry, Inflection
 
 
@@ -664,7 +665,7 @@ def _export_lexicon(
             "normalized_headword": normalized,
             "pos": entry["pos"],
             "ud_pos": sorted(WORDS_TO_UD_POS.get(entry["pos"], set())),
-            "glosses": [g.strip() for g in entry["meaning"].split(";") if g.strip()],
+            "glosses": split_glosses(entry["meaning"]),
             "principal_parts": principal_parts,
             "age": entry["age"],
             "freq": entry["freq"],
@@ -706,7 +707,7 @@ def _export_lexicon(
             "normalized_headword": fix,
             "pos": addon_type,
             "ud_pos": ud_pos,
-            "glosses": [g.strip() for g in a["meaning"].split(";") if g.strip()],
+            "glosses": split_glosses(a["meaning"]),
             "principal_parts": [],
             "age": "X", "freq": "X", "area": "X", "geo": "X", "source": "X",
             "match_type": "addon",

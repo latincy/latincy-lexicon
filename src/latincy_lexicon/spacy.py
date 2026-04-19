@@ -22,6 +22,7 @@ from spacy.language import Language
 from spacy.tokens import Doc, Token
 
 from latincy_lexicon.align.normalize import normalize_latin
+from latincy_lexicon.glosses import split_glosses
 
 
 # =============================================================================
@@ -169,7 +170,8 @@ class WhitakersWords:
                     # Best-fit gloss: first semicolon-delimited clause from top parse
                     if ranked:
                         meaning = ranked[0].get("meaning", "")
-                        token._.gloss = meaning.split(";")[0].strip() if meaning else None
+                        parts = split_glosses(meaning) if meaning else []
+                        token._.gloss = parts[0] if parts else None
 
         return doc
 
