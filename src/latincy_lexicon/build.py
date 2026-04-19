@@ -160,6 +160,7 @@ def _apply_patches(
     next_id = _patch_sum_esse(entries, headwords, next_id)
     _patch_sum_inflections(inflections)
     _patch_pronoun_inflections(inflections)
+    next_id = _patch_packon_pronouns(entries, headwords, next_id)
     return next_id
 
 
@@ -266,6 +267,141 @@ def _patch_pronoun_inflections(inflections: list[dict]) -> None:
             "person": None, "comparison": None, "numeral_sort": None,
             "age": "X", "freq": "A",
         })
+
+
+# PACKON pronouns — indefinite/relative pronouns whose paradigms are
+# assembled at runtime from a base pronoun stem (qui/quis) plus a TACKON
+# suffix (-quam, -que, -dam, -piam, -libet, -vis, -cumque). They have NO
+# entry in DICTLINE.GEN — Whitaker's original Ada program recognizes them
+# via the PACKON descriptors in ADDONS.LAT and the UNIQUES entries for
+# irregular neuter nom/acc forms (quicquam, quidquam, quidque, etc.).
+#
+# The analyzer already handles surface-form lookup correctly (UNIQUES +
+# tackon stripping). But the lexicon export (keyed by lemma) has no
+# `quisquam` / `quisque` / `quidam` key, so downstream `token._.lexicon`
+# lookups using the LatinCy-assigned lemma return empty.
+#
+# Fix: synthesize a DICTLINE-equivalent entry for each PACKON pronoun so
+# the lexicon export picks it up, in the same spirit as the sum/esse
+# patch above. Meanings come verbatim from the PACKON comments in
+# ADDONS.LAT (search "PACKON w/quis"/"PACKON w/qui" in that file).
+#
+# Listed here in the order LatinCy's lemmatizer actually emits them (so
+# `quicquam` → `quisquam`, etc.). We only add lemmas that LatinCy is
+# known to produce as targets and that have no DICTLINE entry.
+_PACKON_PRONOUNS: list[dict] = [
+    {
+        "lemma": "quisquam",
+        # `quis` + `-quam` (indefinite). Substantive neuter is `quicquam`
+        # / `quidquam` (handled via UNIQUES in the analyzer).
+        # ADDONS.LAT: PACKON w/quis (TACKON quam).
+        "meaning": (
+            "any; any man/person, anybody/anyone, any whatever, anything;"
+        ),
+    },
+    {
+        "lemma": "quisque",
+        # `qui` + `-que` (indefinite/universal). ADDONS.LAT: PACKON w/qui
+        # (TACKON que).
+        "meaning": (
+            "whoever it be; whatever; each, each one; everyone, everything;"
+        ),
+    },
+    {
+        "lemma": "quidam",
+        # `qui` + `-dam` (indefinite). ADDONS.LAT: PACKON w/qui
+        # (TACKON dam).
+        "meaning": (
+            "certain; a certain (one); a certain thing;"
+        ),
+    },
+    {
+        "lemma": "quispiam",
+        # `qui` + `-piam` (indefinite). ADDONS.LAT: PACKON w/qui
+        # (TACKON piam). Despite the "w/qui" comment in ADDONS, the
+        # lemma surface form is `quispiam` (with the `quis` nom sg).
+        "meaning": (
+            "any/somebody, any, some, any/something;"
+        ),
+    },
+    {
+        "lemma": "quilibet",
+        # `qui` + `-libet` (indefinite). ADDONS.LAT: PACKON w/qui
+        # (TACKON libet).
+        "meaning": (
+            "anyone; whatever; what you will; no matter which;"
+        ),
+    },
+    {
+        "lemma": "quivis",
+        # `qui` + `-vis` (indefinite). ADDONS.LAT: PACKON w/qui
+        # (TACKON vis).
+        "meaning": (
+            "whoever it be, whomever you please; any/anything whatever;"
+        ),
+    },
+    {
+        "lemma": "quicumque",
+        # `qui` + `-cumque` (generalizing relative). ADDONS.LAT:
+        # PACKON w/qui (TACKON cumque).
+        "meaning": (
+            "whoever; whatever; everyone who, all that, anything that;"
+        ),
+    },
+]
+
+
+def _patch_packon_pronouns(
+    entries: list[dict],
+    headwords: dict[int, tuple[str, str]],
+    next_id: int,
+) -> int:
+    """Add dict entries for PACKON pronouns (quisquam, etc.).
+
+    These are assembled at runtime from pronoun stem + TACKON in WW, so
+    they lack DICTLINE entries. Without this patch, the exported lexicon
+    has no key for the LatinCy-produced lemma, and `token._.lexicon` is
+    empty for every form of the paradigm (see fix-quisquam-lexicon-gap
+    branch / regression test ``tests/test_lexicon_quisquam.py``).
+    """
+    # A quisquam/quisque-style entry may already exist — guard against
+    # double-adding on re-runs. We look both at patch-provided headwords
+    # (e.g., sum from _patch_sum_esse) and at DICTLINE entries whose
+    # stem1 would normalize to the target lemma.
+    existing_lemmas = {norm for _, norm in headwords.values()}
+    for e in entries:
+        if e["pos"] == "PRON" and e.get("stem1"):
+            existing_lemmas.add(normalize_latin(e["stem1"]))
+
+    for spec in _PACKON_PRONOUNS:
+        lemma = spec["lemma"]
+        if lemma in existing_lemmas:
+            continue  # already present from DICTLINE or another patch
+
+        entry_id = next_id
+        next_id += 1
+
+        entries.append({
+            "id": entry_id,
+            # stem1 set to the lemma so headword reconstruction and
+            # stem-based lookups both see a sensible value. The analyzer
+            # never reaches these entries via stem+ending (the analyzer
+            # uses UNIQUES/tackon stripping for this paradigm), so the
+            # concrete stem choice doesn't affect parse results.
+            "stem1": lemma,
+            "stem2": "zzz", "stem3": "zzz", "stem4": "zzz",
+            "pos": "PRON",
+            "decl_which": 1, "decl_var": 0,
+            "gender": None, "noun_kind": None, "verb_kind": None,
+            "pronoun_kind": "INDEF",
+            "comparison": None, "numeral_sort": None,
+            "age": "X", "area": "X", "geo": "X", "freq": "C", "source": "X",
+            "meaning": spec["meaning"],
+            "line_number": None,
+        })
+        headwords[entry_id] = (lemma, lemma)
+
+    return next_id
 
 
 # ---------------------------------------------------------------------------
