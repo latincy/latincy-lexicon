@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1] — 2026-04-21
+
+### Fixed
+
+- Depth-aware gloss splitter: DICTLINE meanings with `;` inside `[...]` or `(...)` (e.g. `[neque..neque=>neither..nor; neque solum..sed etiam=>not only..but also]`) now split at top-level semicolons only, preserving bracketed/parenthetical annotations. Affected ~80 entries.
+- PACKON pronouns (`quisquam`, `quisque`, `quidam`, `quispiam`, `quilibet`, `quivis`, `quicumque`) now have lexicon entries. Their paradigms are assembled from pronoun stem + TACKON and have no DICTLINE record, so `token._.lexicon` returned empty for all forms. Build now synthesizes a DictEntry per lemma, with glosses sourced verbatim from ADDONS.LAT PACKON comments.
+
 ## [0.2.0] — 2026-04-16
 
 ### Performance
