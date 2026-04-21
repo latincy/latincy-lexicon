@@ -1,0 +1,31 @@
+id = "OVR-001"
+date = 2026-04-21
+author = "patrick@diyclassics.org"
+status = "active"
+
+[target]
+lemma = "neque"
+pos = "CONJ"
+
+[change]
+field = "meaning"
+
+[change.borrow_from]
+lemma = "nec"
+pos = "CONJ"
+field = "meaning"
+
+reason = """
+The canonical Whitaker's Words gloss for `neque` CONJ is polluted with a
+bracketed usage-pattern annotation
+(`[neque..neque=>neither..nor; neque solum..sed etiam=>not only..but also]`)
+that reads as junk in lookup UIs and obscures the actual meaning. The
+sibling entry `nec` CONJ carries a semantically equivalent but clean
+gloss (`nor, and..not; not..either, not even;`). Borrowing it preserves
+accuracy while producing readable output.
+
+The `neque` ADV entry is untouched — its canonical gloss (`nor; and not,
+not, neither;`) is already clean.
+"""
+
+reason_short = "Clean up polluted WW gloss; borrow nec CONJ equivalent."
