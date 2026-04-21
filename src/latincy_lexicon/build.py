@@ -161,7 +161,103 @@ def _apply_patches(
     _patch_sum_inflections(inflections)
     _patch_pronoun_inflections(inflections)
     next_id = _patch_packon_pronouns(entries, headwords, next_id)
+    _apply_overrides(entries, _overrides_dir())
     return next_id
+
+
+def _overrides_dir() -> Path:
+    """Path to the bundled overrides directory."""
+    return Path(str(resources.files("latincy_lexicon") / "data" / "overrides"))
+
+
+def _apply_overrides(
+    entries: list[dict],
+    overrides_dir: Path,
+) -> None:
+    """Layer curated overrides on top of canonical entries.
+
+    Reads every ``OVR-*.toml`` file under ``overrides_dir``, skips those
+    whose ``status != "active"``, and applies each active override by
+    mutating the matching entry's field and recording provenance under
+    ``entry["_overrides"]``.
+
+    See ``src/latincy_lexicon/data/overrides/README.md`` for the schema.
+    Missing directory is a no-op (forks without overrides still build).
+    """
+    import tomllib
+
+    if not overrides_dir.exists() or not overrides_dir.is_dir():
+        return
+
+    for toml_path in sorted(overrides_dir.glob("OVR-*.toml")):
+        with open(toml_path, "rb") as f:
+            ovr = tomllib.load(f)
+
+        if ovr.get("status") != "active":
+            continue
+
+        _apply_one_override(entries, ovr)
+
+
+def _apply_one_override(entries: list[dict], ovr: dict) -> None:
+    """Apply a single parsed override to `entries` in place."""
+    ovr_id = ovr["id"]
+    target = ovr["target"]
+    change = ovr["change"]
+    field = change["field"]
+
+    target_entry = _find_entry(entries, target["lemma"], target["pos"])
+    if target_entry is None:
+        raise ValueError(
+            f"{ovr_id}: target entry not found "
+            f"(lemma={target['lemma']!r}, pos={target['pos']!r})"
+        )
+
+    if "borrow_from" in change:
+        borrow = change["borrow_from"]
+        source_entry = _find_entry(entries, borrow["lemma"], borrow["pos"])
+        if source_entry is None:
+            raise ValueError(
+                f"{ovr_id}: borrow_from source not found "
+                f"(lemma={borrow['lemma']!r}, pos={borrow['pos']!r})"
+            )
+        new_value = source_entry[borrow["field"]]
+        source_record = {
+            "kind": "borrow",
+            "lemma": borrow["lemma"],
+            "pos": borrow["pos"],
+            "field": borrow["field"],
+        }
+    elif "to" in change:
+        new_value = change["to"]
+        source_record = {"kind": "literal"}
+    else:
+        raise ValueError(
+            f"{ovr_id}: change block must have either 'borrow_from' or 'to'"
+        )
+
+    original = target_entry.get(field)
+    target_entry[field] = new_value
+    date_val = ovr.get("date")
+    date_str = date_val.isoformat() if hasattr(date_val, "isoformat") else str(date_val)
+    target_entry.setdefault("_overrides", []).append({
+        "id": ovr_id,
+        "field": field,
+        "original_value": original,
+        "source": source_record,
+        "date": date_str,
+        "reason_short": ovr.get("reason_short", ""),
+    })
+
+
+def _find_entry(
+    entries: list[dict], lemma: str, pos: str
+) -> dict | None:
+    """Return the first entry whose stem1 matches lemma and pos matches."""
+    for e in entries:
+        if e.get("stem1") == lemma and e.get("pos") == pos:
+            return e
+    return None
 
 
 def _patch_sum_esse(
@@ -815,6 +911,9 @@ def _export_lexicon(
             val = entry.get(field)
             if val and val != "X":
                 lex_entry[field] = val
+
+        if entry.get("_overrides"):
+            lex_entry["_overrides"] = entry["_overrides"]
 
         # Avoid exact duplicates
         existing = lexicon.get(normalized, [])
