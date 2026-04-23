@@ -15,6 +15,30 @@ from latincy_lexicon.glosses import split_glosses
 from latincy_lexicon.models import DictEntry, Inflection
 
 
+# Source-code priority for dedup tiebreaking. Higher = more authoritative.
+# Classical references outrank Whitaker's custom/overlay additions — the
+# latter sometimes carry shortcut stems (e.g. cano missing the reduplicated
+# perfect stem `cecin`) that would otherwise win by first-seen.
+_SOURCE_PRIORITY: dict[str, int] = {
+    "O": 10,  # Oxford Latin Dictionary
+    "L": 9,   # Lewis
+    "G": 9,   # Lewis & Short
+    "C": 8,   # Cassell's
+    "W": 7,   # Whitaker's Words
+    "E": 6,   # Stelten, Ecclesiastical Latin
+    "F": 6,   # Deferrari, Aquinas
+    "P": 5,   # Souter
+    "K": 5,   # Calepinus Novus
+    "M": 5,   # Latham
+    "B": 5,   # Beeson, Medieval Primer
+    "D": 4,   # Adams, Sexual Vocabulary
+    "V": 4,   # Vademecum
+    "Q": 3,   # Other
+    "S": 2,   # Whitaker custom — frequently carries stub/shortcut stems
+    "X": 1,   # Unknown
+}
+
+
 # ---------------------------------------------------------------------------
 # Locate bundled data files
 # ---------------------------------------------------------------------------
@@ -915,13 +939,30 @@ def _export_lexicon(
         if entry.get("_overrides"):
             lex_entry["_overrides"] = entry["_overrides"]
 
-        # Avoid exact duplicates
-        existing = lexicon.get(normalized, [])
-        if not any(e["headword"] == lex_entry["headword"]
-                   and e["pos"] == lex_entry["pos"]
-                   and e["glosses"] == lex_entry["glosses"]
-                   for e in existing):
-            lexicon.setdefault(normalized, []).append(lex_entry)
+        # Dedup by (headword, pos, glosses). When DICTLINE ships two entries
+        # that agree on those fields but disagree on stems — e.g. the Oxford
+        # entry for `cano` (stems can/can/cecin/cant) vs. the Whitaker-custom
+        # entry (stems can/can/can/canit) — prefer whichever has the more
+        # authoritative source. Without this, whichever entry DICTLINE lists
+        # first wins, and we've seen the bad one win for reduplicated-perfect
+        # verbs like cano.
+        existing = lexicon.setdefault(normalized, [])
+        dup_idx = next(
+            (
+                i for i, e in enumerate(existing)
+                if e["headword"] == lex_entry["headword"]
+                and e["pos"] == lex_entry["pos"]
+                and e["glosses"] == lex_entry["glosses"]
+            ),
+            None,
+        )
+        if dup_idx is None:
+            existing.append(lex_entry)
+        else:
+            old_rank = _SOURCE_PRIORITY.get(existing[dup_idx].get("source", "X"), 0)
+            new_rank = _SOURCE_PRIORITY.get(lex_entry.get("source", "X"), 0)
+            if new_rank > old_rank:
+                existing[dup_idx] = lex_entry
 
     # Pluralia tantum
     from latincy_lexicon.align.pluralia import apply_plural_mappings
