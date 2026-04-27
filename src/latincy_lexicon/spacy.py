@@ -146,32 +146,58 @@ class WhitakersWords:
         self._check_pipeline_position()
 
         for token in doc:
-            # Lexicon lookup (by lemma)
+            if token.is_punct or token.is_space:
+                continue
+
+            # Run the analyzer once and reuse — both the entry enrichment
+            # below and the token._.ww extension consume the same parses.
+            parses = self._analyzer.analyze(token.text) if self._analyzer else []
+
+            # Lexicon entries: lemma-based lookup, augmented with entries
+            # whose headword shows up in any morphological parse of the
+            # surface form. Without this augmentation, a form like `cano`
+            # (lemmatized to verb cano) would never surface the adj canus
+            # entry that legitimately produces `cano` as dat/abl m/n sg.
             if self._lexicon:
-                lemma = normalize_latin(token.lemma_)
-                entries = self._lexicon.get(lemma)
+                entries: list[dict] = []
+                seen: set[tuple[str, str]] = set()
+
+                lemma_key = normalize_latin(token.lemma_) if token.lemma_ else None
+                if lemma_key:
+                    for e in self._lexicon.get(lemma_key, []):
+                        key = (e["headword"], e["pos"])
+                        if key not in seen:
+                            seen.add(key)
+                            entries.append(e)
+
+                for p in parses:
+                    hw_key = normalize_latin(p.headword)
+                    for e in self._lexicon.get(hw_key, []):
+                        if e["pos"] != p.pos:
+                            continue
+                        key = (e["headword"], e["pos"])
+                        if key not in seen:
+                            seen.add(key)
+                            entries.append({**e, "match_type": "inflection"})
+
                 if entries:
                     token._.lexicon = _rank_by_pos(entries, token.pos_)
 
-            # Morphological analysis (by surface form)
-            if self._analyzer and not token.is_punct and not token.is_space:
-                parses = self._analyzer.analyze(token.text)
-                if parses:
-                    parse_dicts = [p.to_dict() for p in parses]
-                    # Stage 1: POS partition (hard filter)
-                    pos_match, pos_other = _partition_by_pos(parse_dicts, token.pos_)
-                    # Stage 2: Multi-signal scoring within each group
-                    if len(pos_match) > 1:
-                        pos_match = _rank_by_context(pos_match, token)
-                    if len(pos_other) > 1:
-                        pos_other = _rank_by_context(pos_other, token)
-                    ranked = pos_match + pos_other
-                    token._.ww = ranked
-                    # Best-fit gloss: first semicolon-delimited clause from top parse
-                    if ranked:
-                        meaning = ranked[0].get("meaning", "")
-                        parts = split_glosses(meaning) if meaning else []
-                        token._.gloss = parts[0] if parts else None
+            # Morphological parses extension (rank-aware, POS-partitioned).
+            if parses:
+                parse_dicts = [p.to_dict() for p in parses]
+                pos_match, pos_other = _partition_by_pos(parse_dicts, token.pos_)
+                if len(pos_match) > 1:
+                    pos_match = _rank_by_context(pos_match, token)
+                if len(pos_other) > 1:
+                    pos_other = _rank_by_context(pos_other, token)
+                ranked = pos_match + pos_other
+                token._.ww = ranked
+                # Best-fit gloss: first semicolon-delimited clause from top parse
+                if ranked:
+                    meaning = ranked[0].get("meaning", "")
+                    parts = split_glosses(meaning) if meaning else []
+                    token._.gloss = parts[0] if parts else None
 
         return doc
 
