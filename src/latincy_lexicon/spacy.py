@@ -158,14 +158,27 @@ class WhitakersWords:
             # surface form. Without this augmentation, a form like `cano`
             # (lemmatized to verb cano) would never surface the adj canus
             # entry that legitimately produces `cano` as dat/abl m/n sg.
+            #
+            # Dedup is content-based — (headword, pos, glosses) — so two
+            # legitimate same-pos homographs (e.g. carmen 'song' freq=A
+            # and carmen 'card for wool' freq=F, both NOUN) both survive,
+            # while the same entry reached via lemma + inflection paths
+            # collapses to one row.
             if self._lexicon:
                 entries: list[dict] = []
-                seen: set[tuple[str, str]] = set()
+                seen: set[tuple] = set()
+
+                def _entry_key(e: dict) -> tuple:
+                    return (
+                        e["headword"],
+                        e["pos"],
+                        tuple(e.get("glosses") or ()),
+                    )
 
                 lemma_key = normalize_latin(token.lemma_) if token.lemma_ else None
                 if lemma_key:
                     for e in self._lexicon.get(lemma_key, []):
-                        key = (e["headword"], e["pos"])
+                        key = _entry_key(e)
                         if key not in seen:
                             seen.add(key)
                             entries.append(e)
@@ -175,7 +188,7 @@ class WhitakersWords:
                     for e in self._lexicon.get(hw_key, []):
                         if e["pos"] != p.pos:
                             continue
-                        key = (e["headword"], e["pos"])
+                        key = _entry_key(e)
                         if key not in seen:
                             seen.add(key)
                             entries.append({**e, "match_type": "inflection"})
