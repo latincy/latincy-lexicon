@@ -70,6 +70,23 @@ def test_inflection_form_cani_still_resolves_canus(nlp):
     assert "canus" in _headwords(tok._.lexicon or [])
 
 
+def test_same_pos_homographs_both_surface(nlp):
+    """carmen has two NOUN entries (freq=A 'song' and freq=F 'card for
+    wool/flax'). They share (headword, pos) but differ in glosses, so
+    content-based dedup must keep both."""
+    doc = nlp("carmen")
+    tok = doc[0]
+    noun_entries = [e for e in (tok._.lexicon or []) if e["pos"] == "N"]
+    glosses_seen = {tuple(e.get("glosses") or ()) for e in noun_entries}
+    assert len(glosses_seen) >= 2, (
+        f"both carmen senses should surface; got glosses {glosses_seen}"
+    )
+    freqs = {e.get("freq") for e in noun_entries}
+    assert {"A", "F"} <= freqs, (
+        f"expected both freq=A (song) and freq=F (wool-card) entries; got {freqs}"
+    )
+
+
 def test_bonus_no_regression_on_lemma_match(nlp):
     """Surface form `bonus`, lemma=bonus: lemma-keyed lookup already
     surfaces both the ADJ and NOUN entries. Enrichment must not duplicate
