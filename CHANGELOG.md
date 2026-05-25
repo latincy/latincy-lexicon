@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.4] — 2026-04-27
+
+### Fixed
+
+- Dedup lexicon enrichment by content rather than position; preserves same-POS homographs that share a surface form but differ in meaning.
+
+## [0.2.3] — 2026-04-27
+
+### Changed
+
+- `token._.lexicon` entries enriched with inflection-derived headwords: for verbs like `cano`, principal-parts forms are now represented in the lexicon entries.
+
+## [0.2.2] — 2026-04-23
+
+### Fixed
+
+- Prefer authoritative source on dedup collision in principal-parts generation (`cano`). Less-authoritative source could previously overwrite a correctly deduced form.
+
 ## [0.2.1] — 2026-04-21
 
 ### Fixed
