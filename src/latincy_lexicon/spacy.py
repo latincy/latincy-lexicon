@@ -32,7 +32,7 @@ from latincy_lexicon.glosses import split_glosses
 
 @Language.factory(
     "whitakers_words",
-    default_config={"lexicon_path": None, "analyzer_path": None},
+    default_config={"lexicon_path": None, "analyzer_path": None, "macron_path": None},
     assigns=["token._.lexicon", "token._.ww", "token._.gloss"],
 )
 def create_whitakers_words(
@@ -40,10 +40,12 @@ def create_whitakers_words(
     name: str,
     lexicon_path: Optional[str] = None,
     analyzer_path: Optional[str] = None,
+    macron_path: Optional[str] = None,
 ) -> "WhitakersWords":
     """Create the Whitaker's Words pipeline component."""
     return WhitakersWords(
         nlp, name, lexicon_path=lexicon_path, analyzer_path=analyzer_path,
+        macron_path=macron_path,
     )
 
 
@@ -68,13 +70,15 @@ class WhitakersWords:
 
     def __init__(self, nlp: Language, name: str, *,
                  lexicon_path: Optional[str] = None,
-                 analyzer_path: Optional[str] = None) -> None:
+                 analyzer_path: Optional[str] = None,
+                 macron_path: Optional[str] = None) -> None:
         self.name = name
         self._nlp = nlp
         self._lexicon: dict = {}
         self._analyzer = None
         self._lexicon_path = lexicon_path
         self._analyzer_path = analyzer_path
+        self._macron_path = macron_path
         # `_loaded` is True once any configured paths have been read into
         # memory. Lazy so that pipelines that merely inspect `nlp.pipe_names`
         # or round-trip via to_disk/from_disk don't pay the ~500ms load cost.
@@ -103,7 +107,7 @@ class WhitakersWords:
 
     def _load_analyzer(self, path: str) -> None:
         from latincy_lexicon.analyzer import Analyzer
-        self._analyzer = Analyzer.from_json(path)
+        self._analyzer = Analyzer.from_json(path, macron_path=self._macron_path)
 
     def _check_pipeline_position(self) -> None:
         """Warn once if placed before components we depend on."""
@@ -225,6 +229,8 @@ class WhitakersWords:
                 json.dump(self._lexicon, f, ensure_ascii=False)
         if self._analyzer_path:
             cfg["analyzer_path"] = self._analyzer_path
+        if self._macron_path:
+            cfg["macron_path"] = self._macron_path
         if cfg:
             with open(path / "ww_config.json", "w") as f:
                 json.dump(cfg, f)
@@ -243,6 +249,8 @@ class WhitakersWords:
             if cfg.get("analyzer_path"):
                 self._analyzer_path = cfg["analyzer_path"]
                 self._loaded = False
+            if cfg.get("macron_path"):
+                self._macron_path = cfg["macron_path"]
         return self
 
     def to_bytes(self, *, exclude: tuple = ()) -> bytes:
@@ -253,6 +261,8 @@ class WhitakersWords:
             data["lexicon"] = self._lexicon
         if self._analyzer_path:
             data["analyzer_path"] = self._analyzer_path
+        if self._macron_path:
+            data["macron_path"] = self._macron_path
         return json.dumps(data, ensure_ascii=False).encode("utf-8") if data else b""
 
     def from_bytes(self, data: bytes, *, exclude: tuple = ()) -> "WhitakersWords":
@@ -265,6 +275,8 @@ class WhitakersWords:
             if d.get("analyzer_path"):
                 self._analyzer_path = d["analyzer_path"]
                 self._loaded = False
+            if d.get("macron_path"):
+                self._macron_path = d["macron_path"]
         return self
 
 

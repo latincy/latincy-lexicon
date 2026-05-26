@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.5] — 2026-05-26
+
+### Added
+
+- Macron morphological filter (Class 1): `Analyzer.from_json()` and `whitakers_words` component now accept an optional `macron_path` pointing to a kaikki-derived macronized-form → UD morph index. When a macronized form is passed to `analyze()`, macrons are stripped for WW stem matching and the kaikki feature intersection is used to post-filter the returned parses. Unambiguous macronized forms (e.g. `puellā`) filter to a single case; ambiguous ones (e.g. `puellīs`) filter to the shared features across all candidates (e.g. Number=Plur). Falls back to all parses if the form is not in the index or the filter would eliminate everything.
+
 ## [0.2.4] — 2026-04-27
 
 ### Fixed

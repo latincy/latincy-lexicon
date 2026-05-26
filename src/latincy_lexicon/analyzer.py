@@ -14,12 +14,45 @@ command.
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 
 from latincy_lexicon.align.normalize import normalize_latin
+
+
+_MACRON_CHARS = frozenset("āēīōūȳĀĒĪŌŪȲ")
+
+
+def _has_macrons(s: str) -> bool:
+    return any(c in _MACRON_CHARS for c in s)
+
+
+def _strip_macrons(s: str) -> str:
+    nfd = unicodedata.normalize("NFD", s)
+    return unicodedata.normalize("NFC", "".join(
+        c for c in nfd if unicodedata.category(c) != "Mn"
+    ))
+
+
+def _parse_ud_morph(morph: str) -> dict[str, str]:
+    return dict(p.split("=", 1) for p in morph.split("|")) if morph else {}
+
+
+# Mapping from Parse attribute name → (UD key, {WW value → UD value})
+_WW_UD: dict[str, tuple[str, dict[str, str]]] = {
+    "case":   ("Case",   {"NOM": "Nom", "GEN": "Gen", "DAT": "Dat",
+                          "ACC": "Acc", "ABL": "Abl", "VOC": "Voc", "LOC": "Loc"}),
+    "number": ("Number", {"S": "Sing", "P": "Plur"}),
+    "gender": ("Gender", {"M": "Masc", "F": "Fem", "N": "Neut", "C": "Com"}),
+    "mood":   ("Mood",   {"IND": "Ind", "SUB": "Sub", "IMP": "Imp", "INF": "Inf"}),
+    "person": ("Person", {"1": "1", "2": "2", "3": "3"}),
+    "voice":  ("Voice",  {"ACTIVE": "Act", "PASSIVE": "Pass"}),
+    "tense":  ("Tense",  {"PRES": "Pres", "IMPF": "Past", "FUT": "Fut",
+                          "PLUP": "Pqp", "FUTP": "Fut"}),
+}
 
 
 @dataclass
@@ -122,13 +155,18 @@ class Analyzer:
         entries: list[dict],
         headwords: dict[int, str],
         plural_mappings: dict[str, str],
+        macron_path: str | Path | None = None,
     ) -> None:
         self.plural_to_singular: dict[str, str] = {v: k for k, v in plural_mappings.items()}
         self.singular_to_plural: dict[str, str] = plural_mappings
+        self._macron_index: dict[str, list[dict]] | None = None
+        if macron_path is not None:
+            with open(macron_path) as f:
+                self._macron_index = json.load(f)
         self._build_caches(inflections, uniques, tackons, entries, headwords)
 
     @classmethod
-    def from_json(cls, path: str | Path) -> "Analyzer":
+    def from_json(cls, path: str | Path, macron_path: str | Path | None = None) -> "Analyzer":
         """Load analyzer from a JSON file (no sqlite3 dependency)."""
         with open(path) as f:
             data = json.load(f)
@@ -140,6 +178,7 @@ class Analyzer:
             entries=data["entries"],
             headwords=headwords,
             plural_mappings=data["plural_mappings"],
+            macron_path=macron_path,
         )
 
     @classmethod
@@ -298,13 +337,16 @@ class Analyzer:
         """Analyze a Latin form and return all possible parses.
 
         Args:
-            form: An inflected Latin word (e.g., "fecerunt").
+            form: An inflected Latin word, with or without macrons (e.g., "puellā").
+                  If macrons are present and a macron index is loaded, results are
+                  post-filtered to the features indicated by the macronized spelling.
 
         Returns:
             List of Parse objects, sorted by frequency (most common first).
         """
-        form_lower = form.lower()
-        forms_to_try = [form_lower]
+        has_macr = _has_macrons(form)
+        form_base = _strip_macrons(form) if has_macr else form
+        form_lower = form_base.lower()
 
         parses: list[Parse] = []
 
@@ -349,7 +391,56 @@ class Analyzer:
         freq_order = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5, "X": 9}
         unique_parses.sort(key=lambda p: freq_order.get(p.freq, 8))
 
+        if has_macr and self._macron_index is not None:
+            unique_parses = self._filter_by_macrons(unique_parses, form)
+
         return unique_parses
+
+    def _filter_by_macrons(self, parses: list[Parse], macronized_form: str) -> list[Parse]:
+        """Post-filter parses using kaikki macron index features.
+
+        Looks up the macronized form, intersects UD features across all kaikki
+        candidates (handles genuinely ambiguous macronized forms), and retains only
+        parses consistent with the intersection. Falls back to returning all parses
+        if the form is not in the index or the filter would eliminate everything.
+        """
+        candidates = self._macron_index.get(macronized_form)  # type: ignore[union-attr]
+        if not candidates:
+            return parses
+
+        shared = _parse_ud_morph(candidates[0]["morph"])
+        for cand in candidates[1:]:
+            feats = _parse_ud_morph(cand["morph"])
+            shared = {k: v for k, v in shared.items() if feats.get(k) == v}
+
+        if not shared:
+            return parses
+
+        filtered = [p for p in parses if self._parse_matches_ud(p, shared)]
+        return filtered if filtered else parses
+
+    def _parse_matches_ud(self, p: Parse, ud_feats: dict[str, str]) -> bool:
+        """Return True if parse p is consistent with all features in ud_feats.
+
+        WW values of "X" or "0" are treated as wildcards and always pass.
+        WW gender "C" (common = M or F) also passes any gender filter, since
+        DICTLINE marks first-declension nouns as common rather than feminine.
+        WW values with no UD mapping are skipped (not considered a mismatch).
+        """
+        for attr, (ud_key, ww_to_ud) in _WW_UD.items():
+            if ud_key not in ud_feats:
+                continue
+            ww_val = getattr(p, attr)
+            if ww_val in ("X", "0"):
+                continue
+            if attr == "gender" and ww_val == "C":
+                continue
+            mapped = ww_to_ud.get(ww_val)
+            if mapped is None:
+                continue
+            if mapped != ud_feats[ud_key]:
+                return False
+        return True
 
     def _try_splits(self, original_form: str, form_lower: str) -> list[Parse]:
         """Try all possible stem+ending splits of a form."""

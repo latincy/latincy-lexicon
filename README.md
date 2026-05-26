@@ -105,6 +105,8 @@ A single component that provides three token extensions:
 
 Either data path is optional: pass only `lexicon_path` for dictionary lookups, only `analyzer_path` for morphological analysis, or both. Best results when placed after all LatinCy pipeline components.
 
+**Macron filter (optional):** pass `macron_path` pointing to a kaikki-derived macronized-form → UD morph index (built by `latincy-words`). When a macronized form is analyzed, the index constrains which parses are returned — `puellā` → ABL only, `puellīs` → plural parses only. Falls back gracefully when a form is not in the index.
+
 ### `paradigm_generator`
 
 Generates complete inflectional paradigms for Latin words. The inverse of the analyzer: given a lemma, it produces all inflected forms with UD morphological features.
