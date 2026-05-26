@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/latincy-lexicon-logo.jpg" alt="LatinCy Readers" width="400">
+  <img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Readers" width="400">
 </p>
 
 # LatinCy Lexicon
