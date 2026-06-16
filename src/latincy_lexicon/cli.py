@@ -25,6 +25,23 @@ def cmd_build(args: argparse.Namespace) -> None:
     print("Done.")
 
 
+def cmd_build_ls(args: argparse.Namespace) -> None:
+    """Build the Lewis & Short JSON store from the Perseus TEI."""
+    from latincy_lexicon.export.lewis_short import build_lewis_short_store
+
+    tei_path = Path(args.tei)
+    output_dir = Path(args.output_dir)
+    if not tei_path.exists():
+        print(f"error: TEI file not found: {tei_path}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Building Lewis & Short store from {tei_path} → {output_dir}/")
+    result = build_lewis_short_store(tei_path, output_dir)
+    print(f"  Entries:    {result['entries']:,}")
+    print(f"  Index keys: {result['index_keys']:,}")
+    print("Done.")
+
+
 def main(argv: list[str] | None = None) -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -41,6 +58,20 @@ def main(argv: list[str] | None = None) -> None:
         help="Output directory for JSON files",
     )
 
+    p_build_ls = sub.add_parser(
+        "build-ls", help="Build the Lewis & Short store from the Perseus TEI"
+    )
+    p_build_ls.add_argument(
+        "--tei",
+        default="data/raw/lewis-short/lat.ls.perseus-eng2.xml",
+        help="Path to the Lewis & Short TEI file",
+    )
+    p_build_ls.add_argument(
+        "--output-dir",
+        default="data/json",
+        help="Output directory for JSON files",
+    )
+
     args = parser.parse_args(argv)
 
     if not args.command:
@@ -49,6 +80,7 @@ def main(argv: list[str] | None = None) -> None:
 
     commands = {
         "build": cmd_build,
+        "build-ls": cmd_build_ls,
     }
 
     commands[args.command](args)

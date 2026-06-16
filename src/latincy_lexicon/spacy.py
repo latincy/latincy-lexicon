@@ -24,7 +24,6 @@ from spacy.tokens import Doc, Token
 from latincy_lexicon.align.normalize import normalize_latin
 from latincy_lexicon.glosses import split_glosses
 
-
 # =============================================================================
 # Whitaker's Words Component (lexicon + analyzer)
 # =============================================================================
@@ -278,6 +277,179 @@ class WhitakersWords:
             if d.get("macron_path"):
                 self._macron_path = d["macron_path"]
         return self
+
+
+# =============================================================================
+# Lewis & Short Component
+# =============================================================================
+
+# UD POS → WW POS code, used to drive L&S homograph ranking.
+_UD_TO_WW_POS_LS: dict[str, str] = {
+    "NOUN": "N", "PROPN": "N", "VERB": "V", "AUX": "V",
+    "ADJ": "ADJ", "ADV": "ADV", "ADP": "PREP",
+    "CCONJ": "CONJ", "SCONJ": "CONJ", "INTJ": "INTERJ",
+    "PRON": "PRON", "DET": "PRON", "NUM": "NUM",
+}
+
+
+@Language.factory(
+    "lewis_short",
+    default_config={"ls_index_path": None, "ls_store_path": None, "include_text": False},
+    assigns=["token._.lewis_short"],
+)
+def create_lewis_short(
+    nlp: Language,
+    name: str,
+    ls_index_path: Optional[str] = None,
+    ls_store_path: Optional[str] = None,
+    include_text: bool = False,
+) -> "LewisShort":
+    """Create the Lewis & Short lookup component."""
+    return LewisShort(
+        nlp, name, ls_index_path=ls_index_path, ls_store_path=ls_store_path,
+        include_text=include_text,
+    )
+
+
+class LewisShort:
+    """Attach ranked Lewis & Short entries to ``token._.lewis_short``.
+
+    For each token, the lemma (falling back to the surface form) is normalized
+    and looked up in ``lewis_short_index.json``. Homograph candidates are ranked
+    best-first by part-of-speech compatibility — nothing is dropped.
+
+    Each result is a lightweight handle: ``{"id", "key", "orth", "pos", "gen",
+    "itype"}`` (the short metadata), but **not** the entry's ~tens-of-KB
+    ``text`` — so a ``Doc`` stays lean and serializable. Pass
+    ``include_text=True`` to inline the full article on every token, or fetch
+    it on demand for a single id via :meth:`get_entry`. Headword and short
+    gloss are expected to come from the ``whitakers_words`` component upstream;
+    ``lewis_short`` is a pure dictionary-article overlay.
+
+    Both files are loaded lazily on first ``__call__`` (the store is ~28 MB),
+    so merely inspecting the pipeline pays no load cost.
+    """
+
+    # Short metadata fields kept on the lean per-token handle (text excluded).
+    _HANDLE_FIELDS = ("key", "orth", "pos", "gen", "itype")
+
+    def __init__(self, nlp: Language, name: str, *,
+                 ls_index_path: Optional[str] = None,
+                 ls_store_path: Optional[str] = None,
+                 include_text: bool = False) -> None:
+        self.name = name
+        self._nlp = nlp
+        self._index: dict[str, list[str]] = {}
+        self._store: dict[str, dict] = {}
+        self._index_path = ls_index_path
+        self._store_path = ls_store_path
+        self._include_text = include_text
+        self._loaded = not ls_index_path
+
+        if not Token.has_extension("lewis_short"):
+            Token.set_extension("lewis_short", default=None)
+
+    def _ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        if self._index_path and not self._index:
+            with open(self._index_path) as f:
+                self._index = json.load(f)
+        if self._store_path and not self._store:
+            with open(self._store_path) as f:
+                self._store = json.load(f)
+        self._loaded = True
+
+    def __call__(self, doc: Doc) -> Doc:
+        self._ensure_loaded()
+        if not self._index:
+            return doc
+
+        from latincy_lexicon.align.assimilate import assimilated_forms
+        from latincy_lexicon.align.lewis_short import rank_ls_candidates
+
+        for token in doc:
+            if token.is_punct or token.is_space:
+                continue
+
+            key = normalize_latin(token.lemma_ or token.text)
+            candidate_ids = self._index.get(key)
+            if not candidate_ids:
+                # Retry with the classical assimilated spelling (adcedo→accedo).
+                for variant in assimilated_forms(key):
+                    candidate_ids = self._index.get(variant)
+                    if candidate_ids:
+                        break
+            if not candidate_ids:
+                continue
+
+            ww_pos = _UD_TO_WW_POS_LS.get(token.pos_, "")
+            ranked = rank_ls_candidates(ww_pos, candidate_ids, self._store)
+            token._.lewis_short = [self._handle(cid) for cid in ranked]
+
+        return doc
+
+    def _handle(self, entry_id: str) -> dict:
+        """Build the per-token result for one L&S id (lean unless include_text)."""
+        entry = self._store.get(entry_id)
+        if entry is None:
+            return {"id": entry_id}
+        if self._include_text:
+            return {"id": entry_id, **entry}
+        return {"id": entry_id, **{f: entry[f] for f in self._HANDLE_FIELDS if f in entry}}
+
+    def get_entry(self, entry_id: str) -> Optional[dict]:
+        """Return the full L&S entry dict (incl. ``text``) for an id, or None.
+
+        Lets a consumer fetch the heavy article on demand when displaying a
+        token that carries only a lean handle. Loads the store if needed.
+        """
+        self._ensure_loaded()
+        entry = self._store.get(entry_id)
+        return {"id": entry_id, **entry} if entry is not None else None
+
+    def to_disk(self, path: str, *, exclude: tuple = ()) -> None:
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        cfg = self._config()
+        if cfg:
+            with open(path / "lewis_short_config.json", "w") as f:
+                json.dump(cfg, f)
+
+    def from_disk(self, path: str, *, exclude: tuple = ()) -> "LewisShort":
+        path = Path(path)
+        config_file = path / "lewis_short_config.json"
+        if config_file.exists():
+            with open(config_file) as f:
+                self._apply_config(json.load(f))
+        return self
+
+    def to_bytes(self, *, exclude: tuple = ()) -> bytes:
+        cfg = self._config()
+        return json.dumps(cfg).encode("utf-8") if cfg else b""
+
+    def from_bytes(self, data: bytes, *, exclude: tuple = ()) -> "LewisShort":
+        if data:
+            self._apply_config(json.loads(data.decode("utf-8")))
+        return self
+
+    def _config(self) -> dict:
+        cfg: dict = {}
+        if self._index_path:
+            cfg["ls_index_path"] = self._index_path
+        if self._store_path:
+            cfg["ls_store_path"] = self._store_path
+        if self._include_text:
+            cfg["include_text"] = True
+        return cfg
+
+    def _apply_config(self, cfg: dict) -> None:
+        if cfg.get("ls_index_path"):
+            self._index_path = cfg["ls_index_path"]
+            self._loaded = False
+        if cfg.get("ls_store_path"):
+            self._store_path = cfg["ls_store_path"]
+        self._include_text = bool(cfg.get("include_text", self._include_text))
 
 
 # =============================================================================

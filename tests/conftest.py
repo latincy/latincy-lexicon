@@ -16,3 +16,14 @@ skip_no_vendor = pytest.mark.skipif(
     not vendor_available(),
     reason="Vendor data not available (run: git clone https://github.com/mk270/whitakers-words vendor/whitakers-words)",
 )
+
+
+LS_TEI = (
+    Path(__file__).parent.parent
+    / "data" / "raw" / "lewis-short" / "lat.ls.perseus-eng2.xml"
+)
+
+skip_no_ls = pytest.mark.skipif(
+    not LS_TEI.exists(),
+    reason="Lewis & Short TEI not available (data/raw/lewis-short/lat.ls.perseus-eng2.xml)",
+)

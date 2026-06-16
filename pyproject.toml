@@ -39,6 +39,7 @@ latincy-lexicon = "latincy_lexicon.cli:main"
 [project.entry-points."spacy_factories"]
 whitakers_words = "latincy_lexicon.spacy:create_whitakers_words"
 paradigm_generator = "latincy_lexicon.spacy:create_paradigm_generator"
+lewis_short = "latincy_lexicon.spacy:create_lewis_short"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/latincy_lexicon"]

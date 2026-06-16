@@ -118,6 +118,26 @@ class Trick:
     explanation: str = ""
 
 
+@dataclass(frozen=True)
+class LewisShortEntry:
+    """A single Lewis & Short ``<entryFree>`` from the Perseus TEI.
+
+    Source: PerseusDL/lexica ``lat.ls.perseus-eng2.xml`` (CC BY-SA 4.0).
+    """
+    id: str                      # stable TEI id, e.g. "n1605"
+    key: str                     # headword, homograph-numbered: "ago", "abactus1"
+    orth: str = ""               # macron-bearing orthography, e.g. "ăgo"
+    pos: str = ""                # L&S part-of-speech abbreviation, e.g. "v. a."
+    gen: str = ""                # gender for nouns (often L&S's only POS signal): "m.", "f.", "n."
+    itype: str = ""              # inflection info / principal parts, e.g. "ēgi, actum, 3"
+    text: str = ""               # plain-text rendering of the entry body
+
+    @property
+    def headword(self) -> str:
+        """The ``key`` with any trailing homograph digits removed ("abactus1" -> "abactus")."""
+        return self.key.rstrip("0123456789")
+
+
 @dataclass
 class LexiconEntry:
     """Runtime lexicon entry for a single lemma, combining Words data."""
