@@ -920,6 +920,7 @@ def _export_lexicon(
             "headword": hw,
             "normalized_headword": normalized,
             "pos": entry["pos"],
+            "decl_which": entry["decl_which"],
             "ud_pos": sorted(WORDS_TO_UD_POS.get(entry["pos"], set())),
             "glosses": split_glosses(entry["meaning"]),
             "principal_parts": principal_parts,
