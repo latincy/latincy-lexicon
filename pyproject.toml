@@ -26,6 +26,10 @@ classifiers = [
 
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/latincy/latincy-lexicon"
+Repository = "https://github.com/latincy/latincy-lexicon"
+
 [project.optional-dependencies]
 spacy = ["spacy>=3.5.0"]
 dev = [

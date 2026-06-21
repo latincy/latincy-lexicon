@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] — 2026-06-20
+
+### Added
+
+- **Lewis & Short dictionary overlay** — new `lewis_short` spaCy component, the offline equivalent of the Perseus Latin Word Study Tool lexicon panel. A pure overlay: `whitakers_words` still owns the headword and short gloss, while `lewis_short` attaches the ranked L&S dictionary article. Includes a stdlib-only TEI P4 parser (`parsers/lewis_short.py`, zero new dependencies, 49,386 index keys), `models.LewisShortEntry`, POS-class + gender homograph disambiguation with prefix-assimilation fallback (`adcedo→accedo`, `conloco→colloco`) for 71.5% alignment coverage, lean Doc handles by default with `include_text=True` opt-in and `.get_entry(id)` on-demand fetch, and full `to_disk`/`from_disk`/`to_bytes`/`from_bytes` serialization. New CLI `build-ls` subcommand builds the L&S store. L&S data is CC BY-SA 4.0 (PerseusDL/lexica).
+- `format_principal_parts(entry)` — new public API in `principal_parts.py` reconstructing textbook citation forms from Whitaker stems. Noun genitives now dispatch on `decl_which` (1–5) instead of headword-shape heuristics, fixing 4th/5th declension forms (`exercitus`, `manus`, `res`, etc.).
+- `decl_which` is now included in every exported lexicon JSON entry.
+
 ## [0.2.5] — 2026-05-26
 
 ### Added
