@@ -31,7 +31,8 @@ from latincy_lexicon.glosses import split_glosses
 
 @Language.factory(
     "whitakers_words",
-    default_config={"lexicon_path": None, "analyzer_path": None, "macron_path": None},
+    default_config={"lexicon_path": None, "analyzer_path": None, "macron_path": None,
+                    "ls_index_path": None, "ls_senses_path": None},
     assigns=["token._.lexicon", "token._.ww", "token._.gloss"],
 )
 def create_whitakers_words(
@@ -40,11 +41,14 @@ def create_whitakers_words(
     lexicon_path: Optional[str] = None,
     analyzer_path: Optional[str] = None,
     macron_path: Optional[str] = None,
+    ls_index_path: Optional[str] = None,
+    ls_senses_path: Optional[str] = None,
 ) -> "WhitakersWords":
     """Create the Whitaker's Words pipeline component."""
     return WhitakersWords(
         nlp, name, lexicon_path=lexicon_path, analyzer_path=analyzer_path,
         macron_path=macron_path,
+        ls_index_path=ls_index_path, ls_senses_path=ls_senses_path,
     )
 
 
@@ -70,7 +74,9 @@ class WhitakersWords:
     def __init__(self, nlp: Language, name: str, *,
                  lexicon_path: Optional[str] = None,
                  analyzer_path: Optional[str] = None,
-                 macron_path: Optional[str] = None) -> None:
+                 macron_path: Optional[str] = None,
+                 ls_index_path: Optional[str] = None,
+                 ls_senses_path: Optional[str] = None) -> None:
         self.name = name
         self._nlp = nlp
         self._lexicon: dict = {}
@@ -78,10 +84,16 @@ class WhitakersWords:
         self._lexicon_path = lexicon_path
         self._analyzer_path = analyzer_path
         self._macron_path = macron_path
+        # Optional Lewis & Short gloss fallback (index: lemma → [entry ids];
+        # senses: entry id → {"senses": [...]}). Loaded lazily on first use.
+        self._ls_index_path = ls_index_path
+        self._ls_senses_path = ls_senses_path
+        self._ls_index: dict = {}
+        self._ls_senses: dict = {}
         # `_loaded` is True once any configured paths have been read into
         # memory. Lazy so that pipelines that merely inspect `nlp.pipe_names`
         # or round-trip via to_disk/from_disk don't pay the ~500ms load cost.
-        self._loaded = not (lexicon_path or analyzer_path)
+        self._loaded = not (lexicon_path or analyzer_path or ls_index_path)
         self._warned = False
 
         if not Token.has_extension("lexicon"):
@@ -98,7 +110,25 @@ class WhitakersWords:
             self._load_lexicon(self._lexicon_path)
         if self._analyzer_path and self._analyzer is None:
             self._load_analyzer(self._analyzer_path)
+        if self._ls_index_path and not self._ls_index:
+            with open(self._ls_index_path) as f:
+                self._ls_index = json.load(f)
+        if self._ls_senses_path and not self._ls_senses:
+            with open(self._ls_senses_path) as f:
+                self._ls_senses = json.load(f)
         self._loaded = True
+
+    def _ls_gloss(self, lemma: str) -> Optional[str]:
+        """First Lewis & Short display gloss for a lemma, or None."""
+        if not (self._ls_index and self._ls_senses and lemma):
+            return None
+        ids = self._ls_index.get(normalize_latin(lemma))
+        if not ids:
+            return None
+        senses = self._ls_senses.get(ids[0], {}).get("senses", [])
+        if not senses:
+            return None
+        return senses[0].get("display_gloss") or senses[0].get("gloss") or None
 
     def _load_lexicon(self, path) -> None:
         with open(path) as f:
@@ -214,6 +244,22 @@ class WhitakersWords:
                     meaning = ranked[0].get("meaning", "")
                     parts = split_glosses(meaning) if meaning else []
                     token._.gloss = parts[0] if parts else None
+
+            # Lexicon fallback: when no parse-based gloss is available (e.g.
+            # 'iustitia', whose surface form the analyzer doesn't segment), fall
+            # back to the top lexicon entry's first sense so the token is still
+            # glossed. The entry's glosses are already split at build time.
+            if token._.gloss is None and token._.lexicon:
+                lex_glosses = token._.lexicon[0].get("glosses") or []
+                if lex_glosses:
+                    token._.gloss = lex_glosses[0]
+
+            # Final fallback: Lewis & Short (only when configured with ls paths).
+            # Fill-only — never overrides a Whitaker gloss already in place.
+            if token._.gloss is None and token.lemma_:
+                ls = self._ls_gloss(token.lemma_)
+                if ls:
+                    token._.gloss = ls
 
         return doc
 

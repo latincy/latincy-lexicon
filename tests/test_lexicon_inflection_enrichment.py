@@ -99,3 +99,39 @@ def test_bonus_no_regression_on_lemma_match(nlp):
     # No duplicates of (headword, pos)
     raw = [(e["headword"], e["pos"]) for e in (tok._.lexicon or [])]
     assert len(raw) == len(set(raw)), f"duplicate entries: {raw}"
+
+
+def test_gloss_falls_back_to_lexicon_when_parse_misses(nlp):
+    """`iustitia`'s surface form isn't segmented by the analyzer, so the
+    parse-based gloss is empty — but the lemma-keyed lexicon entry carries a
+    gloss. token._.gloss must backfill from the top lexicon entry's first sense.
+    """
+    from spacy.tokens import Doc
+
+    doc = nlp(Doc(nlp.vocab, words=["iustitia"], lemmas=["iustitia"], pos=["NOUN"]))
+    assert doc[0]._.gloss == "justice"
+
+
+def test_gloss_falls_back_to_lewis_short(tmp_path):
+    """When neither the analyzer parse nor a Whitaker lexicon entry yields a
+    gloss, but the lemma has a Lewis & Short entry, token._.gloss backfills from
+    the L&S sense (fill-only, opt-in via ls_index_path/ls_senses_path)."""
+    import json as _json
+
+    from spacy.tokens import Doc
+
+    idx = tmp_path / "ls_index.json"
+    senses = tmp_path / "ls_senses.json"
+    idx.write_text(_json.dumps({"ago": ["n9"]}), encoding="utf-8")
+    senses.write_text(
+        _json.dumps({"n9": {"senses": [{"display_gloss": "to put in motion"}]}}),
+        encoding="utf-8",
+    )
+
+    nlp = spacy.blank("la")
+    nlp.add_pipe(
+        "whitakers_words",
+        config={"ls_index_path": str(idx), "ls_senses_path": str(senses)},
+    )
+    doc = nlp(Doc(nlp.vocab, words=["ago"], lemmas=["ago"], pos=["VERB"]))
+    assert doc[0]._.gloss == "to put in motion"

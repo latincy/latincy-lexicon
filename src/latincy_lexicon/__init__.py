@@ -6,4 +6,7 @@ from latincy_lexicon.models import LewisShortSense  # noqa: F401
 from latincy_lexicon.parsers.lewis_short_senses import (  # noqa: F401
     parse_entry as parse_lewis_short_senses,
 )
-from latincy_lexicon.principal_parts import format_principal_parts  # noqa: F401
+from latincy_lexicon.principal_parts import (  # noqa: F401
+    format_principal_parts,
+    pronominal_citation,
+)

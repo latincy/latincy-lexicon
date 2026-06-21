@@ -921,6 +921,7 @@ def _export_lexicon(
             "normalized_headword": normalized,
             "pos": entry["pos"],
             "decl_which": entry["decl_which"],
+            "decl_var": entry["decl_var"],
             "ud_pos": sorted(WORDS_TO_UD_POS.get(entry["pos"], set())),
             "glosses": split_glosses(entry["meaning"]),
             "principal_parts": principal_parts,
@@ -932,7 +933,8 @@ def _export_lexicon(
             "match_type": "self",
         }
 
-        for field in ("gender", "verb_kind", "noun_kind", "comparison"):
+        for field in ("gender", "verb_kind", "noun_kind", "comparison",
+                      "pronoun_kind", "numeral_sort"):
             val = entry.get(field)
             if val and val != "X":
                 lex_entry[field] = val
