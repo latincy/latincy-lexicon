@@ -302,12 +302,13 @@ def create_lewis_short(
     name: str,
     ls_index_path: Optional[str] = None,
     ls_store_path: Optional[str] = None,
+    ls_senses_path: Optional[str] = None,
     include_text: bool = False,
 ) -> "LewisShort":
     """Create the Lewis & Short lookup component."""
     return LewisShort(
         nlp, name, ls_index_path=ls_index_path, ls_store_path=ls_store_path,
-        include_text=include_text,
+        ls_senses_path=ls_senses_path, include_text=include_text,
     )
 
 
@@ -336,15 +337,19 @@ class LewisShort:
     def __init__(self, nlp: Language, name: str, *,
                  ls_index_path: Optional[str] = None,
                  ls_store_path: Optional[str] = None,
+                 ls_senses_path: Optional[str] = None,
                  include_text: bool = False) -> None:
         self.name = name
         self._nlp = nlp
         self._index: dict[str, list[str]] = {}
         self._store: dict[str, dict] = {}
+        self._senses: dict[str, dict] = {}
         self._index_path = ls_index_path
         self._store_path = ls_store_path
+        self._senses_path = ls_senses_path
         self._include_text = include_text
         self._loaded = not ls_index_path
+        self._senses_loaded = not ls_senses_path
 
         if not Token.has_extension("lewis_short"):
             Token.set_extension("lewis_short", default=None)
@@ -359,6 +364,16 @@ class LewisShort:
             with open(self._store_path) as f:
                 self._store = json.load(f)
         self._loaded = True
+
+    def _ensure_senses_loaded(self) -> None:
+        """Lazily load the sense store (independent of the entry store, which the
+        sense API does not require)."""
+        if self._senses_loaded:
+            return
+        if self._senses_path and not self._senses:
+            with open(self._senses_path) as f:
+                self._senses = json.load(f)
+        self._senses_loaded = True
 
     def __call__(self, doc: Doc) -> Doc:
         self._ensure_loaded()
@@ -408,6 +423,18 @@ class LewisShort:
         entry = self._store.get(entry_id)
         return {"id": entry_id, **entry} if entry is not None else None
 
+    def get_senses(self, entry_id: str) -> list[dict]:
+        """Return the structured L&S sense list for an entry id (``[]`` if absent).
+
+        Requires the component to have been configured with ``ls_senses_path``
+        (the ``lewis_short_senses.json`` build artifact); loads it on first use.
+        Each sense follows ``parsers.lewis_short_senses.parse_entry`` — ``id``,
+        ``level``, ``gloss``, ``display_gloss``, ``sameAs``, ``citations``,
+        ``citation_tr``.
+        """
+        self._ensure_senses_loaded()
+        return self._senses.get(entry_id, {}).get("senses", [])
+
     def to_disk(self, path: str, *, exclude: tuple = ()) -> None:
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
@@ -439,6 +466,8 @@ class LewisShort:
             cfg["ls_index_path"] = self._index_path
         if self._store_path:
             cfg["ls_store_path"] = self._store_path
+        if self._senses_path:
+            cfg["ls_senses_path"] = self._senses_path
         if self._include_text:
             cfg["include_text"] = True
         return cfg
@@ -449,6 +478,9 @@ class LewisShort:
             self._loaded = False
         if cfg.get("ls_store_path"):
             self._store_path = cfg["ls_store_path"]
+        if cfg.get("ls_senses_path"):
+            self._senses_path = cfg["ls_senses_path"]
+            self._senses_loaded = False
         self._include_text = bool(cfg.get("include_text", self._include_text))
 
 

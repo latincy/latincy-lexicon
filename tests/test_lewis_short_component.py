@@ -145,3 +145,72 @@ def test_falls_back_to_surface_when_no_lemma(nlp):
     tok = nlp.get_pipe("lewis_short")(doc)[0]
     assert tok._.lewis_short is not None
     assert tok._.lewis_short[0]["key"] == "ago"
+
+
+# --- sense store (.get_senses) ------------------------------------------------
+
+_SENSES = {
+    "n9": {
+        "key": "ago",
+        "slug": "ago",
+        "senses": [
+            {
+                "id": "https://w3id.org/latincy/lemma/ago/sense/I",
+                "level": "I",
+                "n": "I",
+                "gloss": "to put in motion",
+                "display_gloss": "to put in motion",
+                "sameAs": {"perseus_ls_id": "n9.0", "perseus": None, "lila": None},
+                "citations": [],
+                "citation_tr": {},
+            }
+        ],
+    }
+}
+
+
+@pytest.fixture(scope="module")
+def nlp_senses(_paths, tmp_path_factory):
+    idx, store = _paths
+    senses = tmp_path_factory.mktemp("ls_senses") / "lewis_short_senses.json"
+    senses.write_text(json.dumps(_SENSES), encoding="utf-8")
+    nlp = spacy.blank("la")
+    nlp.add_pipe(
+        "lewis_short",
+        config={"ls_index_path": idx, "ls_store_path": store, "ls_senses_path": str(senses)},
+    )
+    return nlp
+
+
+def test_get_senses_returns_sense_list(nlp_senses):
+    senses = nlp_senses.get_pipe("lewis_short").get_senses("n9")
+    assert [s["level"] for s in senses] == ["I"]
+    assert senses[0]["id"] == "https://w3id.org/latincy/lemma/ago/sense/I"
+    assert senses[0]["sameAs"]["perseus_ls_id"] == "n9.0"
+
+
+def test_get_senses_empty_for_unknown_id(nlp_senses):
+    assert nlp_senses.get_pipe("lewis_short").get_senses("nope") == []
+
+
+def test_get_senses_does_not_inflate_token_handles(nlp_senses):
+    # Sense store is opt-in via get_senses; per-token handles stay lean.
+    tok = _run(nlp_senses, "agit", "ago", "VERB")
+    assert "senses" not in tok._.lewis_short[0]
+
+
+def test_senses_path_survives_byte_roundtrip(_paths, tmp_path_factory):
+    idx, store = _paths
+    senses = tmp_path_factory.mktemp("ls_senses_rt") / "lewis_short_senses.json"
+    senses.write_text(json.dumps(_SENSES), encoding="utf-8")
+    nlp = spacy.blank("la")
+    nlp.add_pipe(
+        "lewis_short",
+        config={"ls_index_path": idx, "ls_store_path": store, "ls_senses_path": str(senses)},
+    )
+    data = nlp.get_pipe("lewis_short").to_bytes()
+
+    fresh = spacy.blank("la")
+    pipe = fresh.add_pipe("lewis_short")
+    pipe.from_bytes(data)
+    assert pipe.get_senses("n9")[0]["level"] == "I"

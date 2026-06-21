@@ -138,6 +138,57 @@ class LewisShortEntry:
         return self.key.rstrip("0123456789")
 
 
+@dataclass(frozen=True)
+class LewisShortSense:
+    """One reconstructed L&S sense node (see ``parsers.lewis_short_senses``).
+
+    A typed view over the parser's sense dict. ``to_dict`` reproduces that dict
+    shape exactly, so ``LewisShortSense.from_dict(d).to_dict() == d``.
+    """
+    id: str                      # minted sense IRI: w3id.org/latincy/lemma/{slug}/sense/{path}
+    level: str                   # tree path label, e.g. "I", "I.A", "II.B"
+    n: str = ""                  # original L&S @n label
+    gloss: str = ""              # lead italic gloss (raw)
+    display_gloss: str = ""      # resolved display gloss (own / inherited / entry-primary)
+    perseus_ls_id: str = ""      # Perseus L&S sense xml:id, e.g. "n30406.0"
+    perseus: Optional[str] = None        # resolvable Hopper entry URL
+    lila: Optional[str] = None           # LiLa L&S sense-node IRI
+    citations: tuple[str, ...] = ()      # CTS bibl URNs (evidence)
+    citation_tr: tuple[tuple[str, str], ...] = ()  # (urn, per-citation gloss) pairs
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "LewisShortSense":
+        same = d.get("sameAs", {})
+        return cls(
+            id=d["id"],
+            level=d["level"],
+            n=d.get("n", ""),
+            gloss=d.get("gloss", ""),
+            display_gloss=d.get("display_gloss", ""),
+            perseus_ls_id=same.get("perseus_ls_id", ""),
+            perseus=same.get("perseus"),
+            lila=same.get("lila"),
+            citations=tuple(d.get("citations", ())),
+            citation_tr=tuple(d.get("citation_tr", {}).items()),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "level": self.level,
+            "n": self.n,
+            "gloss": self.gloss,
+            "display_gloss": self.display_gloss,
+            "sameAs": {
+                "perseus_ls_id": self.perseus_ls_id,
+                "perseus": self.perseus,
+                "lila": self.lila,
+            },
+            "citations": list(self.citations),
+            "citation_tr": dict(self.citation_tr),
+        }
+
+
 @dataclass
 class LexiconEntry:
     """Runtime lexicon entry for a single lemma, combining Words data."""

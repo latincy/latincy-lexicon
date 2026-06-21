@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] — 2026-06-20
+
+### Added
+
+- **Lewis & Short sense-tree parsing** — new `parsers/lewis_short_senses.py` reconstructs each entry's structured `<sense>` hierarchy (the `I.A.2.a` nesting), where `parsers/lewis_short.py` only flattens the article to text. It rebuilds the tree from the TEI `level`/`n` labels (correcting buggy source levels, e.g. *pater*'s F/G/H now nest under II instead of stranding at the root), collapses purely-syntactic subdivisions, mints sense IRIs, and keeps the Perseus xml:id and CTS `<bibl>` citations. Stdlib-only; ships in the wheel. Exposed as `parse_lewis_short_senses` and the `LewisShortSense` model.
+- `lewis_short` component gains `.get_senses(entry_id)` (and an `ls_senses_path` config) — an opt-in, lazily-loaded accessor returning an entry's structured senses. Per-token `token._.lewis_short` handles stay lean.
+- CLI `build-ls` now also builds **`lewis_short_senses.json`** (`{id: {key, slug, senses[]}}`); `--no-senses` skips it. Like `lewis_short.json`, this is a **build artifact — not bundled in the wheel**; build it locally and point `ls_senses_path` at it.
+
 ## [0.3.0] — 2026-06-20
 
 ### Added
