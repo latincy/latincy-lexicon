@@ -196,6 +196,44 @@ def test_apply_overrides_missing_dir_is_noop(tmp_path: Path) -> None:
     assert entries[0]["meaning"] == "x;"
 
 
+def test_apply_overrides_gender_literal(tmp_path: Path) -> None:
+    """OVR-002 pattern: literal replacement of a non-meaning field (gender)."""
+    entries = [_entry("nepos", "N", "grandson;", id=1, gender="C")]
+    ovr_dir = tmp_path / "overrides"
+    ovr_dir.mkdir()
+    (ovr_dir / "OVR-002-nepos-noun-gender.toml").write_text(
+        """
+id = "OVR-002"
+date = 2026-06-22
+author = "test"
+status = "active"
+
+[target]
+lemma = "nepos"
+pos = "N"
+
+[change]
+field = "gender"
+to = "M"
+
+reason = "WW marks nepos as C; L&S/OLD give m. only."
+reason_short = "WW marks nepos as C (common), but L&S/OLD both give m. only."
+""".strip()
+    )
+
+    _apply_overrides(entries, ovr_dir)
+
+    nepos = entries[0]
+    assert nepos["gender"] == "M"
+    ovrs = nepos.get("_overrides") or []
+    assert len(ovrs) == 1
+    ovr = ovrs[0]
+    assert ovr["id"] == "OVR-002"
+    assert ovr["field"] == "gender"
+    assert ovr["original_value"] == "C"
+    assert ovr["source"] == {"kind": "literal"}
+
+
 # ---------------------------------------------------------------------------
 # Integration — the exported lexicon.json carries OVR-001 for neque CONJ
 # ---------------------------------------------------------------------------
@@ -250,3 +288,26 @@ def test_ovr_001_does_not_touch_neque_adv(lexicon: dict) -> None:
         assert not e.get("_overrides"), (
             f"neque ADV should have no overrides, got: {e.get('_overrides')}"
         )
+
+
+@skip_no_data
+def test_ovr_002_nepos_noun_gender_in_lexicon(lexicon: dict) -> None:
+    """After build, nepos N entry has gender=M (not C) and carries OVR-002 provenance."""
+    entries = lexicon.get("nepos") or []
+    noun_entries = [e for e in entries if e.get("pos") == "N"]
+    assert noun_entries, "nepos has no N entry in lexicon"
+
+    noun = noun_entries[0]
+    assert noun.get("gender") == "M", (
+        f"nepos N gender should be M after OVR-002; got {noun.get('gender')!r}"
+    )
+
+    ovrs = noun.get("_overrides") or []
+    ovr_ids = [o.get("id") for o in ovrs]
+    assert "OVR-002" in ovr_ids, (
+        f"OVR-002 provenance missing from nepos N; got: {ovr_ids}"
+    )
+    ovr_002 = next(o for o in ovrs if o["id"] == "OVR-002")
+    assert ovr_002.get("original_value") == "C", (
+        "OVR-002 should record original WW value C in original_value"
+    )

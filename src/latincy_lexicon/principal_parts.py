@@ -51,6 +51,10 @@ def format_principal_parts(entry: dict) -> str | None:
         return None
     if hw.lower() in _PRONOMINAL:
         return _PRONOMINAL[hw.lower()]
+    if entry.get("defective"):
+        cit = _format_defective(pos, hw, stems, entry.get("verb_kind"))
+        if cit is not None:
+            return cit
     if pos == "V":
         return _format_verb(
             hw, stems,
@@ -60,6 +64,31 @@ def format_principal_parts(entry: dict) -> str | None:
         return _format_noun(hw, stems, entry.get("gender"), entry.get("decl_which"))
     if pos in ("ADJ", "NUM"):
         return _format_adj(hw, stems)
+    return None
+
+
+# ---------- defective paradigms (Whitaker stem1 == 'zzz') ----------
+
+
+def _format_defective(
+    pos: str | None, hw: str, stems: list[str], verb_kind: str | None,
+) -> str | None:
+    """Citation for entries Whitaker stores with a 'zzz' placeholder stem1.
+
+    These have no present/positive first stem. Verbs are perfect-system-only
+    (memini, odi, novi): the headword is already the perfect 1sg, so cite it
+    with the perfect infinitive (perfect stem + 'isse') and, for non-impersonal
+    verbs with a supine stem, the perfect participle ('osus sum'). Comparative-
+    only adjectives (deterior, ulterior) cite the neuter ('-ius').
+    """
+    if pos == "V":
+        perf_stem = stems[0]
+        parts = [hw, perf_stem + "isse"]
+        if verb_kind != "IMPERS" and len(stems) >= 2 and stems[1]:
+            parts.append(stems[1] + "us sum")
+        return ", ".join(parts)
+    if pos in ("ADJ", "NUM"):
+        return f"{hw}, -ius"
     return None
 
 

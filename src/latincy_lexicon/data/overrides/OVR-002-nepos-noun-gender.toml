@@ -1,0 +1,25 @@
+id = "OVR-002"
+date = 2026-06-22
+author = "patrick@diyclassics.org"
+status = "active"
+
+[target]
+lemma = "nepos"
+pos = "N"
+
+[change]
+field = "gender"
+to = "M"
+
+reason = """
+Whitaker's Words DICTLINE.GEN marks nepos, nepotis as C (common gender), but
+standard reference grammars give it as masculine only (m.). L&S: "nepos, otis, m."
+OLD: "nepos ... masc." The C marking appears to be a WW data error; nepos does
+not vary by grammatical gender the way true common-gender nouns (augur, civis,
+hostis) do. This override corrects the exported gender to M.
+"""
+reason_short = "WW marks nepos as C (common), but L&S/OLD both give m. only."
+
+refs = [
+    "https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059:entry=nepos",
+]

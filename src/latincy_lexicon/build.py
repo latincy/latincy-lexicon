@@ -6,7 +6,9 @@ the bundled data files directly into dicts and writes JSON.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from importlib import resources
 from pathlib import Path
 
@@ -548,11 +550,84 @@ def _build_headwords(
             entry["pos"], entry["decl_which"], entry["decl_var"],
             gender=entry.get("gender"),
             verb_kind=entry.get("verb_kind"),
+            stem2=entry.get("stem2"),
+            stem3=entry.get("stem3"),
+            meaning=entry.get("meaning"),
         )
         normalized = normalize_latin(hw)
         headwords[entry["id"]] = (hw, normalized)
 
     return headwords
+
+
+def _reconstruct_defective_headword(
+    inflections: list[dict],
+    pos: str,
+    decl_which: int,
+    decl_var: int,
+    *,
+    stem2: str | None,
+    stem3: str | None,
+    gender: str | None,
+    verb_kind: str | None,
+    meaning: str | None,
+) -> str:
+    """Lemma for entries whose stem1 is the Whitaker 'zzz' placeholder.
+
+    Builds the citation form from the first real stem instead of emitting a
+    'zzz'-prefixed lemma. Guarantees the placeholder never reaches output:
+    when no rule fits, falls back to the first non-placeholder stem.
+    """
+    real = (stem2 if stem2 and stem2 != "zzz" else None,
+            stem3 if stem3 and stem3 != "zzz" else None)
+
+    if pos == "V" and real[1]:
+        # Perfect-system-only verbs (memini, odi, novi). Real stem is the
+        # perfect (stem3); cite the perfect 1sg, or 3sg for impersonals.
+        person = "3" if verb_kind == "IMPERS" else "1"
+        ending = _find_ending(
+            inflections, "V", decl_which, decl_var, stem_key=3,
+            tense="PERF", voice="ACTIVE", mood="IND", person=person, number="S")
+        return real[1] + (ending if ending is not None
+                          else ("it" if person == "3" else "i"))
+
+    if pos == "ADJ" and real[1]:
+        # Comparative-only adjectives (deterior, ulterior): stem3 + COMP NOM.S.
+        ending = _find_ending(
+            inflections, "ADJ", decl_which, decl_var, stem_key=3,
+            case_val="NOM", number="S", comparison="COMP")
+        return real[1] + (ending if ending is not None else "or")
+
+    if pos in ("ADV", "PREP", "CONJ", "INTERJ") and real[0]:
+        # Comparative adverbs (deterius, ditius): the form itself is stem2.
+        return real[0]
+
+    if pos == "N" and real[0]:
+        # Pluralia tantum with no singular (multi/multae): stem2 + NOM.P.
+        # Plural endings are coded gender C/N, never M/F, so only constrain
+        # gender to pick the neuter ending apart from the common one.
+        if meaning and ("(pl.)" in meaning or "(pl)" in meaning):
+            conds = {"case_val": "NOM", "number": "P"}
+            if gender == "N":
+                conds["gender"] = "N"
+            ending = _find_ending(inflections, "N", decl_which, decl_var,
+                                  stem_key=2, **conds)
+            if ending is not None:
+                return real[0] + ending
+        return real[0]
+
+    if pos == "PRON" and real[0]:
+        # Reflexive pronoun (sui/sibi/se): no nominative; cite the genitive.
+        # Its genitive ending is coded number=X (number-invariant), so don't
+        # constrain number or the lookup falls through to the wrong paradigm.
+        ending = _find_ending(inflections, "PRON", decl_which, decl_var,
+                              stem_key=2, case_val="GEN")
+        if ending is not None:
+            return real[0] + ending
+        return real[0]
+
+    # No rule matched: never emit the placeholder.
+    return real[0] or real[1] or "zzz"
 
 
 def _reconstruct_headword(
@@ -564,8 +639,23 @@ def _reconstruct_headword(
     *,
     gender: str | None = None,
     verb_kind: str | None = None,
+    stem2: str | None = None,
+    stem3: str | None = None,
+    meaning: str | None = None,
 ) -> str:
     """Reconstruct headword from stem1 + ending (in-memory)."""
+    if stem1 == "zzz":
+        # Whitaker uses 'zzz' as a placeholder for a missing stem. Defective
+        # paradigms (PERFDEF/impersonal verbs like memini/odi/novi, the
+        # comparative-only adjectives deterior/ulterior, comparative adverbs,
+        # the reflexive pronoun, a few pluralia tantum) have no first stem, so
+        # the citation lemma must come from the first *real* stem — never from
+        # the 'zzz' placeholder, which previously leaked lemmas like 'zzzo'.
+        return _reconstruct_defective_headword(
+            inflections, pos, decl_which, decl_var,
+            stem2=stem2, stem3=stem3, gender=gender,
+            verb_kind=verb_kind, meaning=meaning,
+        )
     if pos == "N":
         if decl_which == 9:
             return stem1
@@ -888,21 +978,18 @@ def _export_analyzer(
     return len(entries)
 
 
-def _export_lexicon(
+def _build_lexicon_dict(
     entries: list[dict],
     addons: list[dict],
     headwords: dict[int, tuple[str, str]],
     plural_mappings: dict[str, str],
-    output_path: Path,
-) -> int:
-    """Write lexicon.json from in-memory data.
+) -> dict[str, list[dict]]:
+    """Build the lexicon dict from in-memory data (no disk I/O).
 
     Without alignment data, all entries are keyed by normalized headword
     (match_type='self'). This is the no-external-dependency path.
     """
     from latincy_lexicon.enums import WORDS_TO_UD_POS
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     lexicon: dict[str, list[dict]] = {}
 
@@ -938,6 +1025,13 @@ def _export_lexicon(
             val = entry.get(field)
             if val and val != "X":
                 lex_entry[field] = val
+
+        # Whitaker 'zzz' in stem1 marks a defective paradigm (no first stem):
+        # perfect-only verbs (memini/odi/novi) and comparative-only adjectives
+        # (deterior/ulterior). The citation builder needs this to avoid
+        # fabricating a present infinitive from the perfect stem.
+        if entry.get("stem1") == "zzz":
+            lex_entry["defective"] = True
 
         if entry.get("_overrides"):
             lex_entry["_overrides"] = entry["_overrides"]
@@ -996,9 +1090,21 @@ def _export_lexicon(
             addon_entry["connect"] = a["connect"]
         lexicon.setdefault(fix, []).append(addon_entry)
 
+    return lexicon
+
+
+def _export_lexicon(
+    entries: list[dict],
+    addons: list[dict],
+    headwords: dict[int, tuple[str, str]],
+    plural_mappings: dict[str, str],
+    output_path: Path,
+) -> int:
+    """Write lexicon.json to disk; returns the number of lexicon keys."""
+    lexicon = _build_lexicon_dict(entries, addons, headwords, plural_mappings)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(lexicon, f, ensure_ascii=False, indent=1)
-
     return len(lexicon)
 
 
@@ -1006,21 +1112,13 @@ def _export_lexicon(
 # Public API: full build pipeline
 # ---------------------------------------------------------------------------
 
-def build(
-    output_dir: str | Path = "data/json",
-    vendor: str | Path | None = None,
-) -> dict[str, int]:
-    """Run the full build pipeline: parse → patch → headwords → JSON.
+def _prepare(vendor: str | Path | None = None) -> dict:
+    """Parse → patch → headwords → plural mappings (no export).
 
-    Args:
-        output_dir: Directory for output JSON files.
-        vendor: Optional path to WW data files. Defaults to bundled package data.
-
-    Returns:
-        Dict with counts of entries, inflections, headwords, etc.
+    Shared by :func:`build` (which also writes the analyzer + lexicon JSON) and
+    :func:`build_lexicon` (which returns the lexicon dict in memory). Returns the
+    in-memory data structures keyed by name.
     """
-    output_dir = Path(output_dir)
-
     # 1. Parse
     parsed = _parse_all(vendor)
 
@@ -1044,6 +1142,110 @@ def build(
 
     # 5. Plural mappings
     plural_mappings = _build_plural_mappings(entries, inflections, headwords)
+
+    return {
+        "entries": entries,
+        "inflections": inflections,
+        "uniques": uniques,
+        "addons": addons,
+        "headwords": headwords,
+        "plural_mappings": plural_mappings,
+    }
+
+
+def _cache_dir() -> Path:
+    """User cache directory for the built lexicon (dependency-free, XDG-style).
+
+    Honors ``LATINCY_LEXICON_CACHE_DIR`` (explicit override; also used to isolate
+    tests), then ``XDG_CACHE_HOME``, else ``~/.cache`` — never writes into
+    site-packages.
+    """
+    override = os.environ.get("LATINCY_LEXICON_CACHE_DIR")
+    if override:
+        return Path(override)
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".cache"
+    return base / "latincy-lexicon"
+
+
+def _lexicon_cache_key(base: Path) -> str:
+    """Cache key = package version + a hash of the DICTLINE the build reads.
+
+    Version discriminates releases (code + bundled data move together); the
+    DICTLINE hash distinguishes bundled vs. vendor data and catches local edits.
+    """
+    from latincy_lexicon import __version__
+
+    digest = hashlib.sha256((base / "DICTLINE.GEN").read_bytes()).hexdigest()[:16]
+    return f"{__version__}-{digest}"
+
+
+def build_lexicon(
+    vendor: str | Path | None = None, *, use_cache: bool = True
+) -> dict[str, list[dict]]:
+    """Build the lexicon in memory (no analyzer), with a disk cache.
+
+    Returns the same dict :func:`build` writes to ``lexicon.json`` — keyed by
+    normalized headword, each value a list of entry dicts (glosses, principal
+    parts, POS, metadata). Uses the bundled DICTLINE by default; the
+    defective-verb (``zzz``) fix is applied, so no key or citation form contains
+    the placeholder. This is the path downstream consumers (latincy-vocab, the
+    ``whitakers_words`` component) use to get glosses + citation forms without a
+    prebuilt ``lexicon.json`` on disk.
+
+    The full build is ~5s, so the result is cached under :func:`_cache_dir`
+    keyed by :func:`_lexicon_cache_key`. Pass ``use_cache=False`` to force a
+    rebuild and skip the cache entirely. Cache read/write failures degrade to a
+    plain in-memory build rather than raising.
+    """
+    base = data_dir() if vendor is None else Path(vendor)
+    cache_file = _cache_dir() / f"lexicon-{_lexicon_cache_key(base)}.json"
+
+    if use_cache:
+        try:
+            with open(cache_file) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            pass  # missing or corrupt cache → rebuild below
+
+    p = _prepare(vendor)
+    lexicon = _build_lexicon_dict(
+        p["entries"], p["addons"], p["headwords"], p["plural_mappings"]
+    )
+
+    if use_cache:
+        try:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_file, "w") as f:
+                json.dump(lexicon, f, ensure_ascii=False)
+        except OSError:
+            pass  # best-effort cache; a read-only cache dir must not break builds
+
+    return lexicon
+
+
+def build(
+    output_dir: str | Path = "data/json",
+    vendor: str | Path | None = None,
+) -> dict[str, int]:
+    """Run the full build pipeline: parse → patch → headwords → JSON.
+
+    Args:
+        output_dir: Directory for output JSON files.
+        vendor: Optional path to WW data files. Defaults to bundled package data.
+
+    Returns:
+        Dict with counts of entries, inflections, headwords, etc.
+    """
+    output_dir = Path(output_dir)
+
+    p = _prepare(vendor)
+    entries = p["entries"]
+    inflections = p["inflections"]
+    uniques = p["uniques"]
+    addons = p["addons"]
+    headwords = p["headwords"]
+    plural_mappings = p["plural_mappings"]
 
     # 6. Export
     analyzer_path = output_dir / "analyzer.json"

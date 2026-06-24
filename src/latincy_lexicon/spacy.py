@@ -32,7 +32,8 @@ from latincy_lexicon.glosses import split_glosses
 @Language.factory(
     "whitakers_words",
     default_config={"lexicon_path": None, "analyzer_path": None, "macron_path": None,
-                    "ls_index_path": None, "ls_senses_path": None},
+                    "ls_index_path": None, "ls_senses_path": None,
+                    "use_bundled_lexicon": True},
     assigns=["token._.lexicon", "token._.ww", "token._.gloss"],
 )
 def create_whitakers_words(
@@ -43,12 +44,14 @@ def create_whitakers_words(
     macron_path: Optional[str] = None,
     ls_index_path: Optional[str] = None,
     ls_senses_path: Optional[str] = None,
+    use_bundled_lexicon: bool = True,
 ) -> "WhitakersWords":
     """Create the Whitaker's Words pipeline component."""
     return WhitakersWords(
         nlp, name, lexicon_path=lexicon_path, analyzer_path=analyzer_path,
         macron_path=macron_path,
         ls_index_path=ls_index_path, ls_senses_path=ls_senses_path,
+        use_bundled_lexicon=use_bundled_lexicon,
     )
 
 
@@ -76,7 +79,8 @@ class WhitakersWords:
                  analyzer_path: Optional[str] = None,
                  macron_path: Optional[str] = None,
                  ls_index_path: Optional[str] = None,
-                 ls_senses_path: Optional[str] = None) -> None:
+                 ls_senses_path: Optional[str] = None,
+                 use_bundled_lexicon: bool = True) -> None:
         self.name = name
         self._nlp = nlp
         self._lexicon: dict = {}
@@ -90,10 +94,23 @@ class WhitakersWords:
         self._ls_senses_path = ls_senses_path
         self._ls_index: dict = {}
         self._ls_senses: dict = {}
+        # Zero-config default: with no data source configured at all, fall back
+        # to the bundled in-memory lexicon (built from DICTLINE, cached) so
+        # `nlp.add_pipe("whitakers_words")` Just Works for a pip-installed user.
+        # An explicit lexicon_path / analyzer_path / ls_index_path opts out, as
+        # does use_bundled_lexicon=False (analyzer-only or empty component).
+        self._use_bundled_lexicon = (
+            use_bundled_lexicon
+            and not lexicon_path
+            and not analyzer_path
+            and not ls_index_path
+        )
         # `_loaded` is True once any configured paths have been read into
         # memory. Lazy so that pipelines that merely inspect `nlp.pipe_names`
         # or round-trip via to_disk/from_disk don't pay the ~500ms load cost.
-        self._loaded = not (lexicon_path or analyzer_path or ls_index_path)
+        self._loaded = not (
+            lexicon_path or analyzer_path or ls_index_path or self._use_bundled_lexicon
+        )
         self._warned = False
 
         if not Token.has_extension("lexicon"):
@@ -106,6 +123,10 @@ class WhitakersWords:
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
+        if self._use_bundled_lexicon and not self._lexicon:
+            from latincy_lexicon.build import build_lexicon
+
+            self._lexicon = build_lexicon()
         if self._lexicon_path and not self._lexicon:
             self._load_lexicon(self._lexicon_path)
         if self._analyzer_path and self._analyzer is None:

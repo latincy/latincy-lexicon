@@ -4,6 +4,15 @@ import pytest
 from pathlib import Path
 
 
+@pytest.fixture(autouse=True)
+def _isolate_lexicon_cache(tmp_path, monkeypatch):
+    """Point the build_lexicon disk cache at a throwaway dir.
+
+    Keeps tests from reading or polluting the real user cache (and from leaking
+    cache state between tests)."""
+    monkeypatch.setenv("LATINCY_LEXICON_CACHE_DIR", str(tmp_path / "lexicon-cache"))
+
+
 VENDOR_DIR = Path(__file__).parent.parent / "vendor" / "whitakers-words"
 TRICKS_ADB = VENDOR_DIR / "src" / "words_engine" / "words_engine-trick_tables.adb"
 

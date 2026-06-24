@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0] — 2026-06-24
+
+### Added
+
+- **`build_lexicon()`** — public in-memory build of the lexicon dict from the bundled DICTLINE, returning the same structure `build()` writes to `lexicon.json` (keyed by normalized headword; glosses, principal parts, POS, metadata) without touching disk. This is the path downstream consumers use to get glosses + citation forms without a prebuilt `lexicon.json` (which is a build artifact, not shipped in the wheel). Exposed from the package root.
+- **Disk cache for `build_lexicon()`** — the ~5s build (≈39k entries) is cached under an XDG-style user cache dir (`LATINCY_LEXICON_CACHE_DIR` → `XDG_CACHE_HOME` → `~/.cache`), keyed by package version + DICTLINE content hash. Dependency-free; cache read/write failures degrade to a plain rebuild. `use_cache=False` forces a rebuild.
+- **`whitakers_words` works with zero configuration** — when no `lexicon_path`/`analyzer_path`/`ls_index_path` is given, the component now defaults to the bundled in-memory lexicon (via cached `build_lexicon()`), so `nlp.add_pipe("whitakers_words")` sets `token._.lexicon` and `token._.gloss` out of the box. Purely additive; pass `use_bundled_lexicon=False` to opt out (analyzer-only / empty component). Explicit-path behavior is unchanged.
+
+### Fixed
+
+- **Defective-verb `zzz` placeholder no longer leaks into lemmas or citation forms.** Whitaker stores perfect-only verbs (e.g. *ōdī*, *meminī*, *nōvī*), comparative-only adjectives/adverbs, the reflexive pronoun, and some pluralia tantum with `zzz` in stem1 (no first principal part). Headword reconstruction used to append a present ending to that placeholder, producing junk lemmas like `zzzo` and citation forms like `zzzo, osere`. `_reconstruct_defective_headword` now builds the lemma from the first real stem (verbs → perfect 1sg; comparatives → `deterior`/`deterius`; reflexive → `sui`; pluralia → `multi`), `_export_lexicon` marks such entries `defective`, and `principal_parts._format_defective` renders proper perfect-only citations (`odi, odisse, osus sum`; `memini, meminisse`). Regression test asserts no lexicon key ever contains `zzz`.
+
 ## [0.4.0] — 2026-06-20
 
 ### Added

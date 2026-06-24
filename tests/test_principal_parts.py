@@ -236,6 +236,73 @@ def test_verb_soleo_semideponent_2nd():
         == "soleo, solere, solitus sum"
 
 
+# ---------- defective verbs (Whitaker stem1 == 'zzz' placeholder) ----------
+# These are perfect-system-only verbs: Whitaker has no present stem, so it
+# parks the 'zzz' placeholder in stem1/stem2 and the real stems sit in 3/4.
+# The lexicon flags them ``defective`` so the citation is the perfect 1sg +
+# perfect infinitive (memini, meminisse), not a fabricated present.
+
+
+def _dv(hw, stems, which, var, **kw):
+    return {"pos": "V", "headword": hw, "principal_parts": stems,
+            "decl_which": which, "decl_var": var, "defective": True, **kw}
+
+
+def test_verb_odi_perfdef_perfect_only_citation():
+    assert format_principal_parts(
+        _dv("odi", ["od", "os"], 3, 1, verb_kind="PERFDEF")
+    ) == "odi, odisse, osus sum"
+
+
+def test_verb_memini_perfdef_two_parts_no_supine():
+    assert format_principal_parts(
+        _dv("memini", ["memin"], 2, 1, verb_kind="PERFDEF")
+    ) == "memini, meminisse"
+
+
+def test_verb_novi_perfdef():
+    assert format_principal_parts(
+        _dv("novi", ["nov", "not"], 3, 1, verb_kind="PERFDEF")
+    ) == "novi, novisse, notus sum"
+
+
+def test_verb_perodi_perfdef():
+    assert format_principal_parts(
+        _dv("perodi", ["perod", "peros"], 3, 1, verb_kind="PERFDEF")
+    ) == "perodi, perodisse, perosus sum"
+
+
+def test_verb_collibuit_impersonal_perfdef_no_supine():
+    # Impersonals are cited as the 3sg perfect; no participle.
+    assert format_principal_parts(
+        _dv("collibuit", ["collibu", "collibit"], 2, 1, verb_kind="IMPERS")
+    ) == "collibuit, collibuisse"
+
+
+def test_verb_memordi_defective_without_verb_kind():
+    # 'memord' is verb_kind X (dropped from the entry); the defective flag
+    # alone must still route it to the perfect-only citation.
+    assert format_principal_parts(
+        _dv("memordi", ["memord"], 2, 1)
+    ) == "memordi, memordisse"
+
+
+def test_adj_deterior_comparative_only():
+    assert format_principal_parts(
+        {"pos": "ADJ", "headword": "deterior",
+         "principal_parts": ["deteri", "deterri"],
+         "decl_which": 1, "decl_var": 1, "defective": True}
+    ) == "deterior, -ius"
+
+
+def test_adj_ulterior_comparative_only():
+    assert format_principal_parts(
+        {"pos": "ADJ", "headword": "ulterior",
+         "principal_parts": ["ulteri", "ulti"],
+         "decl_which": 3, "decl_var": 1, "defective": True}
+    ) == "ulterior, -ius"
+
+
 # ---------- pronominals & numerals ----------
 
 
