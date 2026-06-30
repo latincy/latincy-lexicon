@@ -104,7 +104,7 @@ A single component that provides three token extensions:
 
 With no configuration the component loads the **bundled lexicon** (glosses + citation forms) — no data files required. Pass `analyzer_path` (from `latincy-lexicon build`) to add the morphological parse engine (`token._.ww`), or `lexicon_path` to override the bundled lexicon. Best results when placed after all LatinCy pipeline components.
 
-**Macron filter (optional):** pass `macron_path` pointing to a kaikki-derived macronized-form → UD morph index (built by `latincy-words`). When a macronized form is analyzed, the index constrains which parses are returned — `puellā` → ABL only, `puellīs` → plural parses only. Falls back gracefully when a form is not in the index.
+**Macron filter (optional):** pass `macron_path` pointing to a kaikki-derived macronized-form → UD morph index (built by `latincy-words`). When a macronized form is analyzed, the index constrains which parses are returned — e.g. `puellā` → ABL only. Falls back gracefully when a form is not in the index.
 
 ### `paradigm_generator`
 
@@ -142,17 +142,19 @@ from latincy_lexicon.generator import Generator
 
 gen = Generator.from_json("data/json/analyzer.json")
 
-# Generate all forms of a lemma
-forms = gen.generate("amo")              # all forms of "amo"
-forms = gen.generate("rex", pos="N")     # noun forms only
+# Generate all forms of a lemma. sort="paradigm" gives traditional
+# pedagogical order (present → imperfect → future, …); the default
+# sort="ud" preserves rule-traversal order for downstream NLP.
+forms = gen.generate("amo", sort="paradigm")
+rex_forms = gen.generate("rex", pos="N")     # nouns only (POS filter)
 
 for f in forms[:5]:
     print(f"{f.form:15} {f.upos:6} {f.feats}")
-# amasso          VERB   Mood=Ind|Number=Sing|Person=1|Tense=Fut|VerbForm=Fin|Voice=Act
-# amassis         VERB   Mood=Ind|Number=Sing|Person=2|Tense=Fut|VerbForm=Fin|Voice=Act
-# amassit         VERB   Mood=Ind|Number=Sing|Person=3|Tense=Fut|VerbForm=Fin|Voice=Act
-# amassimus       VERB   Mood=Ind|Number=Plur|Person=1|Tense=Fut|VerbForm=Fin|Voice=Act
-# amassitis       VERB   Mood=Ind|Number=Plur|Person=2|Tense=Fut|VerbForm=Fin|Voice=Act
+# amo             VERB   Aspect=Imp|Mood=Ind|Number=Sing|Person=1|Tense=Pres|VerbForm=Fin|Voice=Act
+# amas            VERB   Aspect=Imp|Mood=Ind|Number=Sing|Person=2|Tense=Pres|VerbForm=Fin|Voice=Act
+# amat            VERB   Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act
+# amamus          VERB   Aspect=Imp|Mood=Ind|Number=Plur|Person=1|Tense=Pres|VerbForm=Fin|Voice=Act
+# amatis          VERB   Aspect=Imp|Mood=Ind|Number=Plur|Person=2|Tense=Pres|VerbForm=Fin|Voice=Act
 
 # Build form→lemma lookup tables for batch processing
 lookup = gen.to_lookup_dict(["rex", "puella"])
