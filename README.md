@@ -1,8 +1,9 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Readers" width="400">
-</p>
+<img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Lexicon" width="400">
 
-# LatinCy Lexicon
+[![PyPI version](https://img.shields.io/pypi/v/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
+[![Python versions](https://img.shields.io/pypi/pyversions/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 **Whitaker's Words as LatinCy pipeline components for Latin NLP.**
 
@@ -14,28 +15,28 @@
 import spacy
 
 nlp = spacy.load("la_core_web_lg")
-nlp.add_pipe("whitakers_words", config={
-    "lexicon_path": "data/json/lexicon.json",
-    "analyzer_path": "data/json/analyzer.json",
-})
-nlp.add_pipe("paradigm_generator", config={
-    "analyzer_path": "data/json/analyzer.json",
-})
+nlp.add_pipe("whitakers_words")   # zero-config: bundled lexicon, no data files to build
 
 doc = nlp("Poeta bonus carmina pulchra scribit.")
 
-# Dictionary glosses
+# Dictionary glosses — work out of the box
 for token in doc:
     if token._.gloss:
         print(f"{token.text:12} {token._.gloss}")
 # Poeta        poet
-# bonus        good, honest, brave, noble, kind, pleasant, right
-# carmina      song, poem
-# pulchra      pretty, beautiful, handsome, noble, illustrious
+# bonus        good, honest, brave, noble, kind, pleasant, right, useful
+# carmina      song/music
+# pulchra      pretty
 # scribit      write
+```
+
+Morphological analysis (`token._.ww`), reinflection, and paradigms use the analyzer, which you build once from the bundled data (`latincy-lexicon build` writes `analyzer.json` — see [Data Setup](#data-setup)):
+
+```python
+nlp.add_pipe("paradigm_generator", config={"analyzer_path": "data/json/analyzer.json"})
 
 # Reinflection: change morphological features, get the right Latin form
-scribit = doc[4]
+scribit = nlp("Poeta bonus carmina pulchra scribit.")[4]
 print(scribit._.reinflect(Number="Plur"))    # scribunt
 print(scribit._.reinflect(Tense="Imp"))      # scribebat
 print(scribit._.reinflect(Voice="Pass"))     # scribitur
@@ -48,6 +49,7 @@ print(scribit._.reinflect(Voice="Pass"))     # scribitur
 - **Standalone `Generator` API** — Produce all inflected forms for a lemma, or build form-to-lemma lookup tables, without requiring spaCy
 - **POS-aware ranking** — Uses upstream tagger/morphologizer output to rank ambiguous entries and parses
 - **Multi-signal disambiguation** — Scores candidates using lemma match, morphological features, dependency labels, NER context, and dictionary frequency
+- **Clean glosses, originals preserved** — dictionary glosses are stripped of Whitaker's inline formatting (pipe markers, `- ` prefixes) and syntactic usage notes (`(w/DAT)`, `(ne + SUB = …)`, `=>` cross-references); bibliographic citations are surfaced in a `source_refs` field, and the verbatim original senses are kept in `gloss_orig` on any entry the cleanup changed
 
 ## Installation
 
@@ -66,13 +68,15 @@ uv pip install -e ".[dev,spacy]"
 
 ## Data Setup
 
-The Whitaker's Words data files are bundled in the package. Build the JSON data files with a single command:
+Dictionary glosses need **no setup** — `whitakers_words` loads the bundled lexicon on first use (see [Quick Start](#quick-start)).
+
+Morphological analysis (`token._.ww`), reinflection, and paradigm generation use the **analyzer**, which you build once from the bundled data:
 
 ```bash
 latincy-lexicon build
 ```
 
-This parses the bundled DICTLINE, INFLECTS, UNIQUES, and ADDONS files, applies patches (sum/esse, pronoun endings), reconstructs headwords, and writes `analyzer.json` and `lexicon.json` to `data/json/`.
+This parses the bundled DICTLINE, INFLECTS, UNIQUES, and ADDONS files, applies patches (sum/esse, pronoun endings), reconstructs headwords, and writes `analyzer.json` and `lexicon.json` to `data/json/`. Pass `analyzer_path="data/json/analyzer.json"` to the components to enable these features.
 
 ## Usage
 
@@ -80,12 +84,7 @@ This parses the bundled DICTLINE, INFLECTS, UNIQUES, and ADDONS files, applies p
 import spacy
 
 nlp = spacy.load("la_core_web_lg")
-
-# Add Whitaker's Words (lexicon + analyzer in one component)
-nlp.add_pipe("whitakers_words", config={
-    "lexicon_path": "data/json/lexicon.json",
-    "analyzer_path": "data/json/analyzer.json",
-})
+nlp.add_pipe("whitakers_words")   # bundled lexicon; add analyzer_path for token._.ww
 
 doc = nlp("Gallia est omnis divisa in partes tres.")
 
@@ -99,11 +98,11 @@ for token in doc:
 
 A single component that provides three token extensions:
 
-- `token._.lexicon` — list of dictionary entries matching the token's lemma, with glosses, part of speech, principal parts, and age/frequency metadata
+- `token._.lexicon` — list of dictionary entries matching the token's lemma, with glosses, part of speech, principal parts, and age/frequency metadata. Each entry's `glosses` are cleaned of Whitaker's inline formatting and syntactic notes; an entry may also carry `source_refs` (bibliographic citations such as *L+S* or *Souter*, extracted from the gloss text) and `gloss_orig` (the verbatim original Whitaker senses, present only when the cleanup changed them)
 - `token._.ww` — full morphological parse list from the Words stem+ending engine, ranked by POS match, morphological features, dependency labels, NER context, and frequency
-- `token._.gloss` — short definition from the top-ranked parse
+- `token._.gloss` — short definition from the top-ranked parse, with Whitaker's inline usage notes and citations removed
 
-Either data path is optional: pass only `lexicon_path` for dictionary lookups, only `analyzer_path` for morphological analysis, or both. Best results when placed after all LatinCy pipeline components.
+With no configuration the component loads the **bundled lexicon** (glosses + citation forms) — no data files required. Pass `analyzer_path` (from `latincy-lexicon build`) to add the morphological parse engine (`token._.ww`), or `lexicon_path` to override the bundled lexicon. Best results when placed after all LatinCy pipeline components.
 
 **Macron filter (optional):** pass `macron_path` pointing to a kaikki-derived macronized-form → UD morph index (built by `latincy-words`). When a macronized form is analyzed, the index constrains which parses are returned — `puellā` → ABL only, `puellīs` → plural parses only. Falls back gracefully when a form is not in the index.
 
@@ -149,11 +148,11 @@ forms = gen.generate("rex", pos="N")     # noun forms only
 
 for f in forms[:5]:
     print(f"{f.form:15} {f.upos:6} {f.feats}")
-# amo             VERB   Mood=Ind|Number=Sing|Person=1|Tense=Pres|VerbForm=Fin|Voice=Act
-# amas            VERB   Mood=Ind|Number=Sing|Person=2|Tense=Pres|VerbForm=Fin|Voice=Act
-# amat            VERB   Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act
-# amamus          VERB   Mood=Ind|Number=Plur|Person=1|Tense=Pres|VerbForm=Fin|Voice=Act
-# amatis          VERB   Mood=Ind|Number=Plur|Person=2|Tense=Pres|VerbForm=Fin|Voice=Act
+# amasso          VERB   Mood=Ind|Number=Sing|Person=1|Tense=Fut|VerbForm=Fin|Voice=Act
+# amassis         VERB   Mood=Ind|Number=Sing|Person=2|Tense=Fut|VerbForm=Fin|Voice=Act
+# amassit         VERB   Mood=Ind|Number=Sing|Person=3|Tense=Fut|VerbForm=Fin|Voice=Act
+# amassimus       VERB   Mood=Ind|Number=Plur|Person=1|Tense=Fut|VerbForm=Fin|Voice=Act
+# amassitis       VERB   Mood=Ind|Number=Plur|Person=2|Tense=Fut|VerbForm=Fin|Voice=Act
 
 # Build form→lemma lookup tables for batch processing
 lookup = gen.to_lookup_dict(["rex", "puella"])

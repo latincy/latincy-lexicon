@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.7.0] — 2026-06-30
+
+### Added
+
+- **`source_refs` lexicon field** — bibliographic citations Whitaker appended to gloss text (e.g. *"epitomize (Souter)"*, *"copious (L+S, Late Latin)"*) are extracted into a per-entry `source_refs` list and removed from the gloss itself. Covers the curated authority vocabulary (L+S, Souter, Pliny, Latham, Erasmus, Bee, Collins, Cas, Vulgate, OLD, OED, Douay, Def, Nelson, Whitaker, Du Cange); 2,756 entries annotated. Register/period codes (`(Ecc)`, `(Cal)`) and `L:`/`W:`/`E:` prefixes are deliberately kept as usage labels. Purely additive — `glosses` stays `list[str]`.
+- **`gloss_orig` lexicon field** — on the 4,150 entries whose glosses the cleanup below changed, the verbatim original Whitaker senses are preserved in `gloss_orig`, so nothing from the source is discarded and every edit is reversible. Unchanged entries omit the field (their `glosses` already matches the original).
+
+### Changed
+
+- **Cleaner gloss outputs.** A punctuation audit of ~81.5k gloss strings drove a four-part cleanup, centralized in `build._clean_glosses()` and applied identically to dictionary and addon (prefix/suffix/tackon) entries and to the `whitakers_words` component's `token._.gloss`:
+  - leading Whitaker formatting artifacts stripped — pipe markers including multi-pipe sense-numbering (`||`, `|||`) and dash-space (`- `) prefixes; suffix glosses (`-ing`, `-able`) preserved;
+  - trailing syntactic usage notes stripped — subjunctive/infinitive constructions and case-government codes (`(ne + SUB = lest…)`, `(w/DAT)`, `(only NOM S)`), so *timeo* now glosses `fear, dread, be afraid` and *auxilio* `help`;
+  - trailing derivational cross-references stripped — `(adeo => go to)` and similar `=>` / `->` pointers;
+  - bracketed example blocks (`[…]`) and `(= x)` equivalence notes are left in place for downstream filtering.
+
+### Fixed
+
+- **Headword case normalized.** The reconstructed `headword` field is now lowercased (`deus`, not `Deus`; likewise the `II`/`V`/`X` numeral addons), matching classical-lexicon convention. `normalized_headword` (used for lookup, with v/j folding) is unchanged.
+- **Generator no longer over-generates noun forms across genders.** `Generator.generate(lemma, pos="N")` applied every gender variant of a declension class to each noun, emitting spurious forms — e.g. neuter *carmen* (`carmen, carminis`) produced a common-gender `carmines` and a duplicate `Gender=Com` ablative. A gender-compatibility filter now restricts noun forms to the entry's inherent gender, while masculine/feminine nouns still keep their shared common-gender endings (`reges`, `cives`).
+
+Both new fields are additive and the version-keyed build cache auto-invalidates, so installed consumers rebuild cleaned glosses on upgrade.
+
+## [0.6.0] — 2026-06-29
+
+### Added
+
+- **Lewis & Short sense store ships in the wheel.** `lewis_short_senses.json` (~48 MB) and `lewis_short_index.json` (~1.2 MB) are now bundled under `latincy_lexicon/data/json/`, so the structured L&S senses are available on install — no local `build-ls` step. The `lewis_short` component auto-discovers the bundled files when no explicit `ls_senses_path` / `ls_index_path` is given.
+- **`senses_path()` and `sense_index_path()`** — new path accessors in `build.py`, exported from the package root, returning the locations of the bundled L&S sense store and index.
+
+### Changed
+
+- CLI `build-ls` now defaults `--output-dir` to `src/latincy_lexicon/data/json/` (the bundled-data location) instead of `data/json/`.
+
 ## [0.5.0] — 2026-06-24
 
 ### Added
