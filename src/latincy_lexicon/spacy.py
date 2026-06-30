@@ -22,6 +22,7 @@ from spacy.language import Language
 from spacy.tokens import Doc, Token
 
 from latincy_lexicon.align.normalize import normalize_latin
+from latincy_lexicon.build import sense_index_path, senses_path
 from latincy_lexicon.glosses import split_glosses
 
 # =============================================================================
@@ -411,6 +412,15 @@ class LewisShort:
         self._index: dict[str, list[str]] = {}
         self._store: dict[str, dict] = {}
         self._senses: dict[str, dict] = {}
+        # Auto-discover bundled files when no explicit path is provided.
+        if ls_index_path is None:
+            bundled = sense_index_path()
+            if bundled.exists():
+                ls_index_path = str(bundled)
+        if ls_senses_path is None:
+            bundled = senses_path()
+            if bundled.exists():
+                ls_senses_path = str(bundled)
         self._index_path = ls_index_path
         self._store_path = ls_store_path
         self._senses_path = ls_senses_path

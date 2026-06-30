@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_build_ls.add_argument(
         "--output-dir",
-        default="data/json",
+        default="src/latincy_lexicon/data/json",
         help="Output directory for JSON files",
     )
     p_build_ls.add_argument(

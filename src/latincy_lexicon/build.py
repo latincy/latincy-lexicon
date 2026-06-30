@@ -57,6 +57,16 @@ def data_dir() -> Path:
     return Path(str(resources.files("latincy_lexicon") / "data"))
 
 
+def senses_path() -> Path:
+    """Return path to the bundled lewis_short_senses.json (shipped in wheel)."""
+    return Path(str(resources.files("latincy_lexicon") / "data" / "json" / "lewis_short_senses.json"))
+
+
+def sense_index_path() -> Path:
+    """Return path to the bundled lewis_short_index.json (shipped in wheel)."""
+    return Path(str(resources.files("latincy_lexicon") / "data" / "json" / "lewis_short_index.json"))
+
+
 # ---------------------------------------------------------------------------
 # Parse raw files → model objects
 # ---------------------------------------------------------------------------
