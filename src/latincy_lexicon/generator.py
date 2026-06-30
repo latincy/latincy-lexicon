@@ -14,7 +14,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from latincy_lexicon.align.normalize import normalize_latin
-from latincy_lexicon.canonical import is_verb_form_alternate, verb_stems
+from latincy_lexicon.canonical import (
+    is_participle_alternate,
+    is_verb_form_alternate,
+    verb_stems,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -562,7 +566,7 @@ class Generator:
             # Reconstruct the entry's canonical stems once, to flag forms that
             # belong to a parallel/syncopated paradigm (amasso) as alternates.
             pp = [stems[i] for i in (1, 2, 3, 4) if stems[i] and stems[i] != "zzz"]
-            pres_stem, perf_stem, conj, _has_ppp, _sup = verb_stems(lemma, pp)
+            pres_stem, perf_stem, conj, has_ppp, sup_stem = verb_stems(lemma, pp)
             # Class-specific V rules + generic V 0.0
             for rule in self._matching_rules(entry):
                 stem = stems.get(rule["stem_key"], "")
@@ -587,7 +591,13 @@ class Generator:
                 ending = rule.get("ending", "")
                 surface = stem + ending
                 feats = _build_feats(rule, "VPAR", entry)
-                forms.append(Form(form=surface, lemma=lemma, upos=upos, feats=feats))
+                alt = is_participle_alternate(
+                    surface, rule, pres_stem, sup_stem, conj, has_ppp
+                )
+                forms.append(Form(
+                    form=surface, lemma=lemma, upos=upos, feats=feats,
+                    alternate=alt,
+                ))
 
             # SUPINE rules
             for rule in self._matching_supine_rules(entry):

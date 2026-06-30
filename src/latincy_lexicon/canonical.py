@@ -218,6 +218,53 @@ def _is_inf_alternate(form, tense, voice, perf_stem) -> bool:
     return False
 
 
+def _is_part_alternate(form, tense, voice, conj, pres_stem, sup_stem) -> bool:
+    """Route participles built from the wrong stem to alternates — for
+    homonyms (dicere + dicare) the generic rule cascade emits both
+    ``dicens`` / ``dicans``; keep only the stem consistent with this entry.
+
+    Conservative: when the relevant stem is missing we keep the form.
+    """
+    if not (pres_stem or sup_stem):
+        return False
+    if voice == "Pass" and tense == "Past":
+        return bool(sup_stem) and not form.startswith(sup_stem)
+    if voice == "Act" and tense == "Fut":
+        return bool(sup_stem) and not form.startswith(sup_stem)
+    if not (conj and pres_stem and form.startswith(pres_stem)):
+        return False
+    after = form[len(pres_stem):]
+    if voice == "Act" and tense == "Pres":
+        if conj == 1:
+            return not after.startswith(("an", "ant"))
+        return not after.startswith(("en", "ient"))
+    if voice == "Pass" and tense == "Fut":
+        if conj == 1:
+            return not after.startswith("and")
+        if conj == 4:
+            return not after.startswith(("end", "iend"))
+        return not after.startswith(("end", "und"))
+    return False
+
+
+def is_participle_alternate(
+    surface: str, rule: dict, pres_stem: str, sup_stem: str,
+    conj: int | None, has_real_ppp: bool,
+) -> bool:
+    """Decide whether a generated participle is an alternate.
+
+    Flags (A5) the spurious perfect-passive participle of verbs with no real
+    PPP (``sum`` → ``futus``) and (A4) wrong-stem participles from homonym
+    contamination. The future *active* participle (``futurus``) is real even
+    when there is no PPP, so only Past/Passive is suppressed for A5.
+    """
+    tense = _TENSE.get(rule.get("tense", "X"))
+    voice = _VOICE.get(rule.get("voice", "X"))
+    if tense == "Past" and voice == "Pass" and not has_real_ppp:
+        return True
+    return _is_part_alternate(surface, tense or "", voice or "", conj, pres_stem, sup_stem)
+
+
 def is_verb_form_alternate(
     surface: str, rule: dict, pres_stem: str, perf_stem: str, conj: int | None
 ) -> bool:

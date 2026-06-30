@@ -973,3 +973,21 @@ class TestCanonicalAlternates:
             assert all(not f.alternate for f in hits), (
                 f"{surface} (canonical sum) must not be alternate"
             )
+
+    def test_defective_verb_fake_ppp_is_alternate(self):
+        """A5: sum has no perfect passive participle; futus/futa/futum (the
+        library mechanically declining the supine stem) are alternates, but
+        the real future participle futurus stays canonical."""
+        forms = self.gen.generate("sum")
+        futus = [f for f in forms if f.form == "futus"]
+        futurus = [f for f in forms if f.form == "futurus"]
+        assert futus and all(f.alternate for f in futus), "futus (fake PPP) should be alternate"
+        assert futurus and all(not f.alternate for f in futurus), "futurus (real FAP) should be canonical"
+
+    def test_real_participles_not_flagged(self):
+        """A5/A4 must not touch verbs with a real PPP."""
+        forms = self.gen.generate("amo")
+        for surface in ("amatus", "amaturus", "amans", "amandus"):
+            hits = [f for f in forms if f.form == surface]
+            assert hits, f"{surface} should be generated"
+            assert all(not f.alternate for f in hits), f"{surface} should be canonical"
