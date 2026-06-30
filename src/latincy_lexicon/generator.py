@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from latincy_lexicon.align.normalize import normalize_latin
+from latincy_lexicon.canonical import is_verb_form_alternate, verb_stems
 
 
 # ---------------------------------------------------------------------------
@@ -69,10 +70,14 @@ def _build_feats(rule: dict, pos: str, entry: dict | None = None) -> str:
     feats: dict[str, str] = {}
 
     # -- Aspect (derived from tense for verbs) --
+    # All perfect-system tenses (perfect, pluperfect, future-perfect) are
+    # perfective. Tagging FUTP with Aspect=Perf is what keeps the future
+    # perfect (amavero) distinguishable from the simple future (amabo) —
+    # both map to Tense=Fut.
     tense = rule.get("tense", "X")
     if tense in ("PRES", "IMPF"):
         feats["Aspect"] = "Imp"
-    elif tense == "PERF":
+    elif tense in ("PERF", "PLUP", "FUTP"):
         feats["Aspect"] = "Perf"
 
     # -- Case --
@@ -169,11 +174,19 @@ def _ud_pos(entry: dict) -> str:
 
 @dataclass
 class Form:
-    """A single generated inflected form."""
+    """A single generated inflected form.
+
+    ``alternate`` marks a form that is real Latin but not part of the
+    canonical textbook paradigm — Plautine sigmatic forms (``amasso``),
+    archaic infinitives (``amarier``), wrong-stem homonym artefacts, and
+    similar. Consumers building a clean paradigm display can filter on it;
+    the default ``generate()`` still emits every form (exhaustive for NLP).
+    """
     form: str
     lemma: str
     upos: str
     feats: str
+    alternate: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -546,6 +559,10 @@ class Generator:
         }
 
         if pos == "V":
+            # Reconstruct the entry's canonical stems once, to flag forms that
+            # belong to a parallel/syncopated paradigm (amasso) as alternates.
+            pp = [stems[i] for i in (1, 2, 3, 4) if stems[i] and stems[i] != "zzz"]
+            pres_stem, perf_stem, conj, _has_ppp, _sup = verb_stems(lemma, pp)
             # Class-specific V rules + generic V 0.0
             for rule in self._matching_rules(entry):
                 stem = stems.get(rule["stem_key"], "")
@@ -554,7 +571,13 @@ class Generator:
                 ending = rule.get("ending", "")
                 surface = stem + ending
                 feats = _build_feats(rule, "V", entry)
-                forms.append(Form(form=surface, lemma=lemma, upos=upos, feats=feats))
+                alt = is_verb_form_alternate(
+                    surface, rule, pres_stem, perf_stem, conj
+                )
+                forms.append(Form(
+                    form=surface, lemma=lemma, upos=upos, feats=feats,
+                    alternate=alt,
+                ))
 
             # VPAR rules (participles)
             for rule in self._matching_vpar_rules(entry):

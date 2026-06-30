@@ -903,3 +903,73 @@ class TestSpacyComponent:
         doc[1].lemma_ = "amo"
         doc = self.nlp.get_pipe("paradigm_generator")(doc)
         assert doc[0]._.paradigm is doc[1]._.paradigm
+
+
+@skip_no_data
+class TestCanonicalAlternates:
+    """Forms outside the canonical paradigm are flagged Form.alternate."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from latincy_lexicon.generator import Generator
+        self.gen = Generator.from_json(ANALYZER_JSON)
+
+    def _by_form(self, lemma, surface, **feat_kw):
+        forms = self.gen.generate(lemma)
+        out = []
+        for f in forms:
+            if f.form != surface:
+                continue
+            fd = _feats_dict(f.feats)
+            if all(fd.get(k) == v for k, v in feat_kw.items()):
+                out.append(f)
+        return out
+
+    def test_form_has_alternate_field_default_false(self):
+        from latincy_lexicon.generator import Form
+        f = Form(form="amo", lemma="amo", upos="VERB", feats="")
+        assert f.alternate is False
+
+    def test_sigmatic_perfect_forms_are_alternate(self):
+        """Plautine sigmatic forms (amass- stem) are flagged alternate."""
+        for surface in ("amasso", "amassim", "amasseram", "amassem"):
+            fs = self.gen.generate("amo")
+            hits = [f for f in fs if f.form == surface]
+            assert hits, f"{surface} should be generated"
+            assert all(f.alternate for f in hits), (
+                f"{surface} should be alternate (syncopated stem)"
+            )
+
+    def test_canonical_finite_forms_not_alternate(self):
+        """Standard paradigm forms (amav- stem, present system) are canonical."""
+        for surface in ("amo", "amas", "amat", "amavi", "amaveram", "amavero",
+                        "amabo", "amabam", "amarem"):
+            hits = [f for f in self.gen.generate("amo") if f.form == surface]
+            assert hits, f"{surface} should be generated"
+            assert all(not f.alternate for f in hits), (
+                f"{surface} should NOT be alternate"
+            )
+
+    def test_future_perfect_distinguished_from_future(self):
+        """A1: amavero (FutP) carries Aspect=Perf; amabo (Fut) does not."""
+        avero = self._by_form("amo", "amavero", Tense="Fut")
+        abo = self._by_form("amo", "amabo", Tense="Fut")
+        assert avero and all(_feats_dict(f.feats).get("Aspect") == "Perf" for f in avero)
+        assert abo and all("Aspect" not in _feats_dict(f.feats) for f in abo)
+
+    def test_archaic_infinitive_is_alternate(self):
+        """amarier (archaic Pres Pass inf) is alternate; amari is not."""
+        arier = [f for f in self.gen.generate("amo") if f.form == "amarier"]
+        ari = [f for f in self.gen.generate("amo")
+               if f.form == "amari" and "VerbForm=Inf" in f.feats]
+        assert arier and all(f.alternate for f in arier)
+        assert ari and all(not f.alternate for f in ari)
+
+    def test_irregular_verb_not_false_flagged(self):
+        """Conservative: sum's canonical perfect forms are not flagged."""
+        for surface in ("fui", "fuero", "fueram", "fuisse"):
+            hits = [f for f in self.gen.generate("sum") if f.form == surface]
+            assert hits, f"{surface} should be generated"
+            assert all(not f.alternate for f in hits), (
+                f"{surface} (canonical sum) must not be alternate"
+            )
