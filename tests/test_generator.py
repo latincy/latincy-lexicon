@@ -1039,3 +1039,75 @@ class TestNonVerbCleanup:
         """No generated form has an empty surface string."""
         for lemma in ("cum", "amo", "rex", "bonus"):
             assert all(f.form for f in self.gen.generate(lemma)), f"{lemma} emitted empty form"
+
+
+@skip_no_data
+class TestWikipediaParadigm:
+    """Golden paradigm: our canonical (non-alternate) amo forms must match
+    the reference first-conjugation paradigm from
+    https://en.wikipedia.org/wiki/Latin_conjugation (macrons stripped).
+
+    Future-perfect is checked as UD Tense=Fut|Aspect=Perf (the library does
+    not emit a non-standard Tense=FutP)."""
+
+    # (Mood, Voice, Tense) -> [1sg, 2sg, 3sg, 1pl, 2pl, 3pl]
+    AMO = {
+        ("Ind", "Act", "Pres"): "amo amas amat amamus amatis amant",
+        ("Ind", "Act", "Imp"): "amabam amabas amabat amabamus amabatis amabant",
+        ("Ind", "Act", "Fut"): "amabo amabis amabit amabimus amabitis amabunt",
+        ("Ind", "Act", "Past"): "amavi amavisti amavit amavimus amavistis amaverunt",
+        ("Ind", "Act", "Pqp"): "amaveram amaveras amaverat amaveramus amaveratis amaverant",
+        ("Ind", "Act", "FutP"): "amavero amaveris amaverit amaverimus amaveritis amaverint",
+        ("Sub", "Act", "Pres"): "amem ames amet amemus ametis ament",
+        ("Sub", "Act", "Imp"): "amarem amares amaret amaremus amaretis amarent",
+        ("Sub", "Act", "Past"): "amaverim amaveris amaverit amaverimus amaveritis amaverint",
+        ("Sub", "Act", "Pqp"): "amavissem amavisses amavisset amavissemus amavissetis amavissent",
+        ("Ind", "Pass", "Pres"): "amor amaris amatur amamur amamini amantur",
+        ("Ind", "Pass", "Imp"): "amabar amabaris amabatur amabamur amabamini amabantur",
+        ("Ind", "Pass", "Fut"): "amabor amaberis amabitur amabimur amabimini amabuntur",
+    }
+    PN = [("1", "Sing"), ("2", "Sing"), ("3", "Sing"),
+          ("1", "Plur"), ("2", "Plur"), ("3", "Plur")]
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from latincy_lexicon.generator import Generator
+        self.gen = Generator.from_json(ANALYZER_JSON)
+        self.forms = self.gen.generate("amo")
+
+    def _canonical_match(self, surface, mood, voice, tense, person, number):
+        # FutP -> UD Tense=Fut | Aspect=Perf
+        want = {"Mood": mood, "Voice": voice, "Person": person,
+                "Number": number, "VerbForm": "Fin"}
+        if tense == "FutP":
+            want["Tense"], want["Aspect"] = "Fut", "Perf"
+        else:
+            want["Tense"] = tense
+        for f in self.forms:
+            if f.form != surface or f.alternate:
+                continue
+            fd = _feats_dict(f.feats)
+            if all(fd.get(k) == v for k, v in want.items()):
+                return True
+        return False
+
+    def test_amo_finite_paradigm_matches_wikipedia(self):
+        missing = []
+        for (mood, voice, tense), words in self.AMO.items():
+            for (person, number), surface in zip(self.PN, words.split()):
+                if not self._canonical_match(surface, mood, voice, tense, person, number):
+                    missing.append((mood, voice, tense, person, number, surface))
+        assert not missing, f"Canonical forms missing/mistagged vs Wikipedia: {missing}"
+
+    def test_amo_infinitives_match_wikipedia(self):
+        inf = {(_feats_dict(f.feats).get("Tense"), _feats_dict(f.feats).get("Voice")): f.form
+               for f in self.forms
+               if not f.alternate and _feats_dict(f.feats).get("VerbForm") == "Inf"}
+        assert inf.get(("Pres", "Act")) == "amare"
+        assert inf.get(("Pres", "Pass")) == "amari"
+        assert inf.get(("Past", "Act")) == "amavisse"
+
+    def test_amo_imperatives_present(self):
+        imp = {f.form for f in self.forms
+               if not f.alternate and "Mood=Imp" in f.feats and "Tense=Pres" in f.feats}
+        assert {"ama", "amate"} <= imp
