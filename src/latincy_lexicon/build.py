@@ -11,9 +11,14 @@ import json
 import os
 from importlib import resources
 from pathlib import Path
+from typing import Optional
 
 from latincy_lexicon.align.normalize import normalize_latin
-from latincy_lexicon.glosses import split_glosses
+from latincy_lexicon.glosses import (
+    extract_sources,
+    split_glosses,
+    strip_usage_note,
+)
 from latincy_lexicon.models import DictEntry, Inflection
 
 
@@ -988,6 +993,37 @@ def _export_analyzer(
     return len(entries)
 
 
+def _clean_glosses(
+    meaning: str,
+) -> tuple[list[str], list[str], Optional[list[str]]]:
+    """Split a DICTLINE meaning into clean glosses + source refs + original.
+
+    Pipeline: split on ``;`` (paren/bracket-aware, with leading-artifact
+    cleaning) → pull bibliographic citations into ``source_refs`` → strip
+    trailing syntactic/cross-reference usage notes. Glosses that reduce to
+    nothing (pure citation) are dropped. Shared by the main-entry and addon
+    builders so both paths clean identically.
+
+    Returns ``(glosses, source_refs, gloss_orig)`` where ``gloss_orig`` is the
+    verbatim original split (``clean=False``) when our cleaning changed the
+    glosses, else ``None`` — keeping the unaltered WW senses accessible in the
+    dataset without bloating unchanged entries.
+    """
+    original = split_glosses(meaning, clean=False)
+    glosses: list[str] = []
+    source_refs: list[str] = []
+    for raw_gloss in split_glosses(meaning):
+        clean, srcs = extract_sources(raw_gloss)
+        clean = strip_usage_note(clean)
+        if clean:
+            glosses.append(clean)
+        for s in srcs:
+            if s not in source_refs:
+                source_refs.append(s)
+    gloss_orig = original if original != glosses else None
+    return glosses, source_refs, gloss_orig
+
+
 def _build_lexicon_dict(
     entries: list[dict],
     addons: list[dict],
@@ -1013,14 +1049,16 @@ def _build_lexicon_dict(
         stems = [entry["stem1"], entry["stem2"], entry["stem3"], entry["stem4"]]
         principal_parts = [s for s in stems if s and s != "zzz"]
 
+        glosses, source_refs, gloss_orig = _clean_glosses(entry["meaning"])
+
         lex_entry: dict = {
-            "headword": hw,
+            "headword": hw.lower(),
             "normalized_headword": normalized,
             "pos": entry["pos"],
             "decl_which": entry["decl_which"],
             "decl_var": entry["decl_var"],
             "ud_pos": sorted(WORDS_TO_UD_POS.get(entry["pos"], set())),
-            "glosses": split_glosses(entry["meaning"]),
+            "glosses": glosses,
             "principal_parts": principal_parts,
             "age": entry["age"],
             "freq": entry["freq"],
@@ -1035,6 +1073,12 @@ def _build_lexicon_dict(
             val = entry.get(field)
             if val and val != "X":
                 lex_entry[field] = val
+
+        if source_refs:
+            lex_entry["source_refs"] = source_refs
+
+        if gloss_orig is not None:
+            lex_entry["gloss_orig"] = gloss_orig
 
         # Whitaker 'zzz' in stem1 marks a defective paradigm (no first stem):
         # perfect-only verbs (memini/odi/novi) and comparative-only adjectives
@@ -1085,17 +1129,22 @@ def _build_lexicon_dict(
         else:
             ud_pos = ["X"]
 
+        addon_glosses, addon_sources, addon_orig = _clean_glosses(a["meaning"])
         addon_entry = {
-            "headword": a["fix"],
+            "headword": a["fix"].lower(),
             "normalized_headword": fix,
             "pos": addon_type,
             "ud_pos": ud_pos,
-            "glosses": split_glosses(a["meaning"]),
+            "glosses": addon_glosses,
             "principal_parts": [],
             "age": "X", "freq": "X", "area": "X", "geo": "X", "source": "X",
             "match_type": "addon",
             "addon_type": addon_type,
         }
+        if addon_sources:
+            addon_entry["source_refs"] = addon_sources
+        if addon_orig is not None:
+            addon_entry["gloss_orig"] = addon_orig
         if a.get("connect"):
             addon_entry["connect"] = a["connect"]
         lexicon.setdefault(fix, []).append(addon_entry)

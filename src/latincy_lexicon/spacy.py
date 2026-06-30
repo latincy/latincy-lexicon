@@ -23,7 +23,11 @@ from spacy.tokens import Doc, Token
 
 from latincy_lexicon.align.normalize import normalize_latin
 from latincy_lexicon.build import sense_index_path, senses_path
-from latincy_lexicon.glosses import split_glosses
+from latincy_lexicon.glosses import (
+    extract_sources,
+    split_glosses,
+    strip_usage_note,
+)
 
 # =============================================================================
 # Whitaker's Words Component (lexicon + analyzer)
@@ -265,7 +269,11 @@ class WhitakersWords:
                 if ranked:
                     meaning = ranked[0].get("meaning", "")
                     parts = split_glosses(meaning) if meaning else []
-                    token._.gloss = parts[0] if parts else None
+                    if parts:
+                        clean, _ = extract_sources(parts[0])
+                        token._.gloss = strip_usage_note(clean) or None
+                    else:
+                        token._.gloss = None
 
             # Lexicon fallback: when no parse-based gloss is available (e.g.
             # 'iustitia', whose surface form the analyzer doesn't segment), fall
@@ -274,7 +282,7 @@ class WhitakersWords:
             if token._.gloss is None and token._.lexicon:
                 lex_glosses = token._.lexicon[0].get("glosses") or []
                 if lex_glosses:
-                    token._.gloss = lex_glosses[0]
+                    token._.gloss = strip_usage_note(lex_glosses[0])
 
             # Final fallback: Lewis & Short (only when configured with ls paths).
             # Fill-only — never overrides a Whitaker gloss already in place.
