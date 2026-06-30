@@ -161,7 +161,17 @@ lookup = gen.to_lookup_dict(["rex", "puella"])
 # {"rex": "rex", "regis": "rex", "regi": "rex", ..., "puella": "puella", ...}
 ```
 
-Each `Form` has four fields: `form` (surface), `lemma` (citation), `upos` (UD POS), and `feats` (UD feature string).
+Each `Form` has five fields: `form` (surface), `lemma` (citation), `upos` (UD POS), `feats` (UD feature string), and `alternate` (bool).
+
+### Canonical vs. alternate forms
+
+`generate()` is exhaustive — it returns every form Whitaker's data can produce, including ones outside the standard textbook paradigm: Plautine sigmatic forms (`amasso`), archaic infinitives (`amarier`), and wrong-stem artefacts. Each such form is flagged `alternate=True`, so a clean paradigm is one filter away:
+
+```python
+canonical = [f for f in gen.generate("amo") if not f.alternate]
+```
+
+This keeps the full set available for NLP while letting a paradigm viewer show only the canonical forms.
 
 ## Acknowledgments
 

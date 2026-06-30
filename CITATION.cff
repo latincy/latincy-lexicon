@@ -7,6 +7,6 @@ authors:
   - family-names: Burns
     given-names: Patrick J.
 license: MIT
-version: "0.7.0"
+version: "0.8.0"
 date-released: "2026-06-30"
 repository-code: "https://github.com/latincy/latincy-lexicon"

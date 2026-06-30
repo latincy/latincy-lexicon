@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.8.0] — 2026-06-30
+
+Upstreams the paradigm corrections that the `latincy-lexicon-site` viewer
+previously applied post-hoc, so the library — not each consumer — owns the
+linguistic judgement. The site can now read the new metadata and stay
+presentational.
+
+### Added
+
+- **`Form.alternate`** — new boolean field on generated forms. It marks a form
+  that is real Latin but outside the canonical textbook paradigm: Plautine
+  sigmatic forms (`amasso`, `amasseram`, `amassim` off the syncopated `amass-`
+  stem), archaic infinitives (`amarier`), the spurious perfect-passive
+  participle of verbs with no PPP (`sum` → `futus`), and wrong-stem/wrong-conj
+  artefacts (`audio` → `audbam`). Additive and non-breaking — `generate()`
+  still emits every form (exhaustive for downstream NLP); build a clean
+  paradigm by filtering `not f.alternate`. New `canonical.py` reconstructs each
+  verb's canonical stems (rewriting the syncopated `-ass` perfect back to
+  `-av`) to make the judgement; age/frequency codes cannot — many sigmatic
+  forms are `age='X'`.
+
+### Changed
+
+- **Future perfect is now distinguishable from the future.** Perfect-system
+  tenses (perfect, pluperfect, future-perfect) carry `Aspect=Perf`, so
+  `amavero` (`Tense=Fut|Aspect=Perf`) is no longer conflated with `amabo`
+  (`Tense=Fut`). UD-conformant — no non-standard tense value introduced.
+- **`generate()` output is cleaner.** Byte-identical duplicate forms and
+  empty-surface forms are dropped; synthetic comparative/superlative rows that
+  don't actually compare are removed (`cum` no longer yields a spurious
+  comparative), while real comparatives with distinct surfaces (`celerius`,
+  `melior`) survive.
+
+### Fixed
+
+- **Noun gender no longer reads `Com` for single-gender nouns.** A declension
+  rule tagged `Gender=Com` (1st-decl serves masc `agricola` and fem `cura`) is
+  overridden by the noun's own lexicon gender, so `cura` reads `Fem`.
+  Genuinely common-gender nouns (`civis`) keep `Com`.
+
+### Validated
+
+- The canonical (non-`alternate`) `amo` paradigm is asserted against the
+  reference first-conjugation tables on
+  [Wikipedia](https://en.wikipedia.org/wiki/Latin_conjugation) — 78 finite
+  forms plus infinitives and imperatives.
+
 ## [0.7.0] — 2026-06-30
 
 ### Added
