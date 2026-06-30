@@ -90,8 +90,16 @@ def _build_feats(rule: dict, pos: str, entry: dict | None = None) -> str:
         feats["Case"] = _CASE_MAP[case_val]
 
     # -- Gender (from rule, or fall back to entry for nouns) --
+    # A noun has one inherent gender, but WW's declension rules are tagged
+    # Gender=Com when they serve both masc and fem (1st decl: agricola M /
+    # cura F). For nouns with a specific lexicon gender, prefer that over a
+    # rule's Com tag so cura reads Fem, not Com. Genuinely common-gender
+    # nouns (entry gender 'C', e.g. civis) keep Com.
     gender = rule.get("gender", "X")
-    if gender in _GENDER_MAP:
+    entry_gender = entry.get("gender") if entry else None
+    if pos == "N" and gender == "C" and entry_gender in ("M", "F", "N"):
+        feats["Gender"] = _GENDER_MAP[entry_gender]
+    elif gender in _GENDER_MAP:
         feats["Gender"] = _GENDER_MAP[gender]
     elif entry and pos == "N" and entry.get("gender") in _GENDER_MAP:
         feats["Gender"] = _GENDER_MAP[entry["gender"]]
@@ -174,6 +182,30 @@ def _ud_pos(entry: dict) -> str:
             return "AUX"
         return "VERB"
     return _POS_MAP.get(pos, "X")
+
+
+def _drop_fake_comparatives(forms: list["Form"]) -> list["Form"]:
+    """Drop synthetic Degree=Cmp/Sup rows that don't actually compare.
+
+    WW emits comparative/superlative rows for every adjective and adverb,
+    even non-gradable ones (``cum`` → a spurious ``cumius``/``cum`` Cmp). A
+    Cmp/Sup form whose surface also occurs with a positive or degree-less
+    reading of the same UPOS is not a real comparison and is removed; genuine
+    comparatives (``celerius`` ≠ ``celeriter``) keep distinct surfaces and
+    survive.
+    """
+    bare_or_pos = {
+        (f.upos, f.form)
+        for f in forms
+        if "Degree=Cmp" not in f.feats and "Degree=Sup" not in f.feats
+    }
+    out = []
+    for f in forms:
+        is_cmp_sup = "Degree=Cmp" in f.feats or "Degree=Sup" in f.feats
+        if is_cmp_sup and (f.upos, f.form) in bare_or_pos:
+            continue
+        out.append(f)
+    return out
 
 
 @dataclass
@@ -499,6 +531,8 @@ class Generator:
         seen: set[tuple[str, str]] = set()
         for entry in entries:
             for f in self._generate_entry(entry, lemma):
+                if not f.form:  # drop empty-surface forms (indeclinables)
+                    continue
                 key = (f.form, f.feats)
                 if key not in seen:
                     seen.add(key)
@@ -531,6 +565,8 @@ class Generator:
                     continue
                 upos = _ud_pos(ref_entry)
                 feats = _build_feats(u, u["pos"])
+                if not u["form"]:
+                    continue
                 key = (u["form"], feats)
                 if key not in seen:
                     seen.add(key)
@@ -538,6 +574,7 @@ class Generator:
                         form=u["form"], lemma=lemma, upos=upos, feats=feats,
                     ))
 
+        all_forms = _drop_fake_comparatives(all_forms)
         if sort == "paradigm":
             all_forms.sort(key=_paradigm_sort_key)
         return all_forms

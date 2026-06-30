@@ -991,3 +991,51 @@ class TestCanonicalAlternates:
             hits = [f for f in forms if f.form == surface]
             assert hits, f"{surface} should be generated"
             assert all(not f.alternate for f in hits), f"{surface} should be canonical"
+
+
+@skip_no_data
+class TestNonVerbCleanup:
+    """A6/A7/A9: adverb comparatives, empty forms, noun gender."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from latincy_lexicon.generator import Generator
+        self.gen = Generator.from_json(ANALYZER_JSON)
+
+    def test_a9_first_decl_fem_gender_not_com(self):
+        """cura (1st decl F) reads Gender=Fem, not the rule's Com tag."""
+        forms = self.gen.generate("cura", pos="N")
+        genders = {_feats_dict(f.feats).get("Gender") for f in forms}
+        assert "Fem" in genders
+        assert "Com" not in genders
+
+    def test_a9_common_gender_noun_keeps_com(self):
+        """civis is genuinely common gender; must NOT be overridden."""
+        forms = self.gen.generate("civis", pos="N")
+        genders = {_feats_dict(f.feats).get("Gender") for f in forms}
+        assert genders == {"Com"}, f"civis should stay Com, got {genders}"
+
+    def test_a6_drops_fake_adverb_comparatives(self):
+        """cum doesn't compare — no Degree=Cmp/Sup rows survive."""
+        forms = self.gen.generate("cum")
+        bad = [f for f in forms if "Degree=Cmp" in f.feats or "Degree=Sup" in f.feats]
+        assert not bad, f"cum should have no comparative rows; got {[f.form for f in bad]}"
+
+    def test_a6_keeps_real_comparatives(self):
+        """celeriter keeps its real celerius/celerrime; only the fake
+        celeriter(Cmp/Sup) self-rows are dropped."""
+        forms = self.gen.generate("celeriter")
+        surfaces = {f.form for f in forms}
+        assert "celerius" in surfaces and "celerrime" in surfaces
+        fake = [f for f in forms if f.form == "celeriter"
+                and ("Degree=Cmp" in f.feats or "Degree=Sup" in f.feats)]
+        assert not fake
+
+    def test_a6_keeps_suppletive_adjective_comparative(self):
+        """bonus → melior (suppletive) must survive."""
+        assert "melior" in {f.form for f in self.gen.generate("bonus", pos="ADJ")}
+
+    def test_a7_no_empty_surface_forms(self):
+        """No generated form has an empty surface string."""
+        for lemma in ("cum", "amo", "rex", "bonus"):
+            assert all(f.form for f in self.gen.generate(lemma)), f"{lemma} emitted empty form"
