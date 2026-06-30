@@ -1111,3 +1111,23 @@ class TestWikipediaParadigm:
         imp = {f.form for f in self.forms
                if not f.alternate and "Mood=Imp" in f.feats and "Tense=Pres" in f.feats}
         assert {"ama", "amate"} <= imp
+
+    def test_a2b_wrong_stem_present_artefact_is_alternate(self):
+        """audio's imperfect artefact audbam (wrong stem+ending for audiebam)
+        is flagged; the canonical audiebam and present forms are not."""
+        forms = self.gen.generate("audio")
+        audbam = [f for f in forms if f.form == "audbam"]
+        assert audbam and all(f.alternate for f in audbam), "audbam should be alternate"
+        for surface in ("audiebam", "audio", "audis", "audiunt", "audire"):
+            hits = [f for f in forms if f.form == surface]
+            assert hits and all(not f.alternate for f in hits), f"{surface} canonical"
+
+    def test_a2b_third_io_present_forms_canonical(self):
+        """3rd-io capio builds present forms on both stems; none of its
+        canonical present forms (incl. consonant-stem capere/caperem) are
+        mis-flagged by the present-system validation."""
+        forms = self.gen.generate("capio")
+        for surface in ("capio", "capis", "capit", "capimus", "capitis", "capiunt",
+                        "capere", "caperis", "caperem", "capiebam", "capiam"):
+            hits = [f for f in forms if f.form == surface and not f.alternate]
+            assert hits, f"{surface} should be a canonical present form of capio"

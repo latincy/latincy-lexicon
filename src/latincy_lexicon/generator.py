@@ -604,6 +604,15 @@ class Generator:
             # belong to a parallel/syncopated paradigm (amasso) as alternates.
             pp = [stems[i] for i in (1, 2, 3, 4) if stems[i] and stems[i] != "zzz"]
             pres_stem, perf_stem, conj, has_ppp, sup_stem = verb_stems(lemma, pp)
+            # 3rd-io verbs (capio): decl_which 3 but the present stem ends -i;
+            # true 4th conj (audio) is decl_var 4. Present-system ending
+            # validation is skipped for 3rd-io (they build some present forms
+            # on the consonant stem, e.g. canonical `capere`).
+            third_io = (
+                entry.get("decl_which") == 3
+                and entry.get("decl_var") != 4
+                and pres_stem.endswith("i")
+            )
             # Class-specific V rules + generic V 0.0
             for rule in self._matching_rules(entry):
                 stem = stems.get(rule["stem_key"], "")
@@ -613,7 +622,7 @@ class Generator:
                 surface = stem + ending
                 feats = _build_feats(rule, "V", entry)
                 alt = is_verb_form_alternate(
-                    surface, rule, pres_stem, perf_stem, conj
+                    surface, rule, pres_stem, perf_stem, conj, third_io
                 )
                 forms.append(Form(
                     form=surface, lemma=lemma, upos=upos, feats=feats,

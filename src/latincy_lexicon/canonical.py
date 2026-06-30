@@ -186,7 +186,8 @@ _PRES_SYS_ENDINGS = _build_pres_sys_endings()
 # ---------------------------------------------------------------------------
 
 def _is_finite_alternate(
-    form, mood, tense, conj, pres_stem, perf_stem, person, number, voice
+    form, mood, tense, conj, pres_stem, perf_stem, person, number, voice,
+    third_io=False,
 ) -> bool:
     if not perf_stem and not pres_stem:
         return False
@@ -195,11 +196,22 @@ def _is_finite_alternate(
     # This is the robust discriminator — a pure stem-prefix test.
     if tense in _PERF_SYS_TENSES:
         return bool(perf_stem) and not form.startswith(perf_stem)
-    # NOTE: present-system ending-table validation (catching wrong-conj
-    # present artefacts like dico's `dicas`) is intentionally deferred — the
-    # _detect_conj heuristic maps 3rd-io verbs (capio) to conj 4, so the
-    # conj-4 table would falsely flag canonical `capere`. Re-enable once 3rd-io
-    # has its own ending set. See _PRES_SYS_ENDINGS.
+    # Present-system ending validation catches wrong-conj/wrong-stem present
+    # artefacts (audio's `audbam` for `audiebam`). Skipped for 3rd-io verbs:
+    # _detect_conj maps them to conj 4 by the -io ending, but they build some
+    # present forms on the consonant stem (capio → canonical `capere`), which
+    # the conj-4 table — and the present-stem prefix test — would mis-flag.
+    if third_io:
+        return False
+    if conj and pres_stem and tense in {"Pres", "Imp", "Fut"}:
+        endings = _PRES_SYS_ENDINGS.get((conj, mood, tense, voice), {})
+        valid = endings.get((person, number)) if (person and number) else None
+        if valid is not None:
+            if not form.startswith(pres_stem):
+                return True
+            return form[len(pres_stem):] not in valid
+    if tense == "Fut" and mood == "Ind" and pres_stem and conj in _FUT_IND_PREFIX:
+        return not form.startswith(pres_stem + _FUT_IND_PREFIX[conj])
     return False
 
 
@@ -266,12 +278,14 @@ def is_participle_alternate(
 
 
 def is_verb_form_alternate(
-    surface: str, rule: dict, pres_stem: str, perf_stem: str, conj: int | None
+    surface: str, rule: dict, pres_stem: str, perf_stem: str,
+    conj: int | None, third_io: bool = False,
 ) -> bool:
     """Decide whether a generated finite/infinitive verb form is an alternate.
 
     ``rule`` carries WW field codes (tense/mood/voice/person/number); they are
-    mapped into the UD-ish space the discriminators use. Conservative: unknown
+    mapped into the UD-ish space the discriminators use. ``third_io`` suppresses
+    present-system ending validation for 3rd-io verbs. Conservative: unknown
     codes or missing stems default to canonical (not alternate).
     """
     tense = _TENSE.get(rule.get("tense", "X"))
@@ -285,5 +299,5 @@ def is_verb_form_alternate(
     number = _NUMBER.get(rule.get("number", "X"), "")
     return _is_finite_alternate(
         surface, mood, tense, conj, pres_stem, perf_stem,
-        person, number, voice or "",
+        person, number, voice or "", third_io,
     )
