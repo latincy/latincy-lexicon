@@ -31,6 +31,29 @@ _GENDER_MAP = {"M": "Masc", "F": "Fem", "N": "Neut", "C": "Com"}
 _COMPARISON_MAP = {"POS": "Pos", "COMP": "Cmp", "SUPER": "Sup"}
 
 
+def _gender_compatible(rule_gender: str, entry_gender: str) -> bool:
+    """Whether an INFLECTS rule's gender applies to a noun of *entry_gender*.
+
+    Nouns have one inherent gender, so a rule tagged with a conflicting
+    specific gender — e.g. the common-gender ``-es`` plural rules of the 3rd
+    declension applied to a neuter noun like *carmen* — must be skipped, or it
+    over-generates spurious forms (``carmines``). ``X`` (unspecified) on either
+    side imposes no constraint. Common gender (``C``) and masculine/feminine
+    share endings, so they are treated as mutually compatible.
+    """
+    if not entry_gender or entry_gender == "X":
+        return True
+    if not rule_gender or rule_gender == "X":
+        return True
+    if rule_gender == entry_gender:
+        return True
+    if entry_gender == "C" and rule_gender in ("M", "F"):
+        return True
+    if rule_gender == "C" and entry_gender in ("M", "F"):
+        return True
+    return False
+
+
 def _build_feats(rule: dict, pos: str, entry: dict | None = None) -> str:
     """Build a UD feature string from an INFLECTS rule dict.
 
@@ -590,6 +613,15 @@ class Generator:
                     slot = (rule.get("case_val"), rule.get("number"), rule["stem_key"])
                     if slot in covered_slots:
                         continue
+                # Suppress rules whose gender conflicts with a noun's inherent
+                # gender — e.g. common-gender ``-es`` plural rules on neuter
+                # ``carmen`` would otherwise emit a spurious ``carmines``.
+                # Adjectives/pronouns/numerals legitimately inflect for all
+                # genders, so this applies to nouns only.
+                if pos == "N" and not _gender_compatible(
+                    rule.get("gender", "X"), entry.get("gender", "X")
+                ):
+                    continue
                 stem = stems.get(rule["stem_key"], "")
                 if stem is None or stem == "zzz":
                     continue

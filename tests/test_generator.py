@@ -682,6 +682,41 @@ class TestNounParadigmCleanup:
             f"civis must have standard civium gen pl; got {surfaces}"
         )
 
+    def test_carmen_no_foreign_gender_forms(self):
+        """carmen (neuter 3rd decl) must not get common-gender -es forms.
+
+        Both ``carmen`` entries are neuter (N 3 2 N). The 3rd-decl/var-2 rule
+        set also carries common-gender rules (the ``-es`` plural); without a
+        gender filter these leak in as a spurious ``carmines`` and Com-gender
+        duplicates of the ablative.
+        """
+        forms = self.gen.generate("carmen", pos="N")
+        surfaces = {f.form for f in forms}
+        assert "carmines" not in surfaces, (
+            "carmines (common-gender -es plural) must not appear for neuter carmen"
+        )
+        com = [f.feats for f in forms if "Gender=Com" in f.feats]
+        assert not com, f"neuter carmen must not emit Com-gender forms; got {com}"
+
+    def test_carmen_keeps_neuter_paradigm(self):
+        """carmen keeps the full canonical neuter paradigm."""
+        forms = self.gen.generate("carmen", pos="N")
+        surfaces = {f.form for f in forms}
+        for expected in ("carmen", "carminis", "carmini", "carmine",
+                         "carmina", "carminum", "carminibus"):
+            assert expected in surfaces, f"carmen missing standard form {expected!r}"
+
+    def test_neuter_filter_preserves_masc_and_common_es_plurals(self):
+        """The gender filter must NOT strip legitimate -es plurals.
+
+        ``rex`` (M) → ``reges`` and ``civis`` (C) → ``cives`` are real
+        common-gender-shared endings that masc/common nouns keep.
+        """
+        rex = {f.form for f in self.gen.generate("rex", pos="N")}
+        civis = {f.form for f in self.gen.generate("civis", pos="N")}
+        assert "reges" in rex
+        assert "cives" in civis
+
 
 @skip_no_data
 class TestParadigmSort:
