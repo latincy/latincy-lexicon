@@ -683,7 +683,8 @@ class ParadigmGenerator:
                 if forms:
                     cache[cache_key] = [
                         {"form": f.form, "lemma": f.lemma,
-                         "upos": f.upos, "feats": _parse_feats(f.feats)}
+                         "upos": f.upos, "feats": _parse_feats(f.feats),
+                         "alternate": f.alternate}
                         for f in forms
                     ]
                 else:

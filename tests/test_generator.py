@@ -841,6 +841,20 @@ class TestSpacyComponent:
         assert "amo" in form_strs
         assert "amat" in form_strs
 
+    def test_paradigm_dict_exposes_alternate(self):
+        """token._.paradigm dicts carry the alternate flag so consumers can
+        build a clean paradigm without re-deriving it."""
+        doc = self.nlp.make_doc("amo")
+        doc[0].lemma_ = "amo"
+        doc[0].pos_ = "VERB"
+        doc = self.nlp.get_pipe("paradigm_generator")(doc)
+        paradigm = doc[0]._.paradigm
+        assert all("alternate" in f for f in paradigm)
+        amasso = [f for f in paradigm if f["form"] == "amasso"]
+        assert amasso and all(f["alternate"] for f in amasso)
+        amo = [f for f in paradigm if f["form"] == "amo"]
+        assert amo and all(not f["alternate"] for f in amo)
+
     def test_reinflect_number(self):
         from spacy.tokens import MorphAnalysis
         doc = self.nlp.make_doc("amat")
