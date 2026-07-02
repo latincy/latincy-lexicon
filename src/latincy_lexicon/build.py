@@ -699,6 +699,8 @@ def _reconstruct_headword(
             return stem1 + ending
 
     elif pos == "ADJ":
+        if decl_which == 9:
+            return stem1
         prefer_nonempty = (decl_which == 3 and decl_var == 2)
         for g in ("M", "C", "X"):
             ending = _find_ending(inflections, "ADJ", decl_which, decl_var,

@@ -511,6 +511,38 @@ def test_adj_felix_one_ending_uses_stem2_for_gen():
     assert format_principal_parts(entry) == "felix, felicis"
 
 
+def test_adj_satis_indeclinable_decl9():
+    # ADJ 9 9 = indeclinable; citation is just the headword, no -us/-a/-um suffix.
+    entry = {
+        "pos": "ADJ",
+        "headword": "satis",
+        "principal_parts": ["satis"],
+        "decl_which": 9,
+    }
+    assert format_principal_parts(entry) == "satis"
+
+
+def test_adj_sat_indeclinable_decl9():
+    entry = {
+        "pos": "ADJ",
+        "headword": "sat",
+        "principal_parts": ["sat"],
+        "decl_which": 9,
+    }
+    assert format_principal_parts(entry) == "sat"
+
+
+def test_adj_satius_indeclinable_decl9_not_us_a_um():
+    # satius ends in -us but is ADJ 9 9 (indeclinable) — must not append -a, -um.
+    entry = {
+        "pos": "ADJ",
+        "headword": "satius",
+        "principal_parts": ["satius"],
+        "decl_which": 9,
+    }
+    assert format_principal_parts(entry) == "satius"
+
+
 # ---------- fallback ----------
 
 

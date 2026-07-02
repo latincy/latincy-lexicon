@@ -63,7 +63,7 @@ def format_principal_parts(entry: dict) -> str | None:
     if pos == "N":
         return _format_noun(hw, stems, entry.get("gender"), entry.get("decl_which"))
     if pos in ("ADJ", "NUM"):
-        return _format_adj(hw, stems)
+        return _format_adj(hw, stems, entry.get("decl_which"))
     return None
 
 
@@ -326,7 +326,9 @@ def _noun_genitive(hw: str, stems: list[str], decl: int | None) -> str:
 # ---------- adjectives ----------
 
 
-def _format_adj(hw: str, stems: list[str]) -> str:
+def _format_adj(hw: str, stems: list[str], decl_which: int | None = None) -> str:
+    if decl_which == 9:
+        return hw
     if hw.endswith("us"):
         return f"{hw}, -a, -um"
     if hw.endswith("er"):

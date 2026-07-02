@@ -53,3 +53,19 @@ def test_build_lexicon_odi_citation():
         and any("hate" in g for g in (e.get("glosses") or []))
     )
     assert format_principal_parts(odi) == "odi, odisse, osus sum"
+
+
+def test_build_lexicon_satis_headword_not_satisus():
+    """ADJ 9 9 (indeclinable) must not gain a -us suffix; headword = 'satis'."""
+    from latincy_lexicon import build_lexicon, format_principal_parts
+
+    lex = build_lexicon()
+    satis_entries = lex.get("satis", [])
+    adj_entry = next(
+        (e for e in satis_entries if e.get("pos") == "ADJ"), None
+    )
+    assert adj_entry is not None, "satis ADJ entry missing from lexicon"
+    assert adj_entry["headword"] == "satis", (
+        f"expected headword 'satis', got {adj_entry['headword']!r}"
+    )
+    assert format_principal_parts(adj_entry) == "satis"
