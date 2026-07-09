@@ -22,7 +22,12 @@ reason = "..."                  # why these forms behave as asserted
 include_variants = false        # the generate() flag under test
 must_appear      = ["puella"]   # every form here MUST be generated
 must_not_appear  = ["puellabus"]# none of these may be generated
+lemma            = "amo"        # optional: override fixture lemma for this
+pos              = "V"           #   check (assert cross-lemma no-leak guards)
 ```
+
+A `[[check]]` may override `lemma`/`pos` to assert cross-lemma behavior — e.g. a
+form restored to lemma X must NOT also leak into an unrelated lemma Y.
 
 A fixture typically has two `[[check]]` blocks — one for the clean default
 (`include_variants = false`) and one for the exhaustive set

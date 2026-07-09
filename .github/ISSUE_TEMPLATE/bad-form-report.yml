@@ -1,0 +1,64 @@
+name: "Bad or missing form"
+description: Report a wrong, spurious, or missing inflected form / lemma / gloss.
+title: "[form] <lemma>: <short description>"
+labels: ["form-bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Each confirmed form bug becomes a regression
+        fixture (`tests/fixtures/regressions/REG-*.toml`) so it can never
+        silently come back. The fields below map directly onto that fixture.
+  - type: input
+    id: lemma
+    attributes:
+      label: Lemma (citation form)
+      description: The dictionary headword you queried, e.g. `puella`, `deus`, `fero`.
+      placeholder: puella
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Problem kind
+      options:
+        - Spurious form (a form appears that should not)
+        - Missing form (a form that should appear is absent)
+        - Wrong surface (right slot, wrong spelling/capitalization)
+        - Wrong lemma / gloss / feature
+    validations:
+      required: true
+  - type: textarea
+    id: forms
+    attributes:
+      label: The form(s)
+      description: |
+        List the specific surface form(s) and what is wrong. If you know the
+        expected value, give it. These become `must_appear` / `must_not_appear`.
+      placeholder: |
+        `Deus` (capital) appears in the default paradigm of common `deus`.
+        Expected: lowercase `deus` in the default; `Deus` only with variants.
+    validations:
+      required: true
+  - type: input
+    id: pos
+    attributes:
+      label: POS (optional)
+      description: WW POS if relevant — N, V, ADJ, ADV, PRON, NUM, …
+      placeholder: "N"
+  - type: textarea
+    id: repro
+    attributes:
+      label: How you queried (optional)
+      description: The `generate()` call, spaCy pipeline, or CLI command used.
+      placeholder: |
+        from latincy_lexicon.generator import Generator
+        g = Generator.from_json("data/json/analyzer.json")
+        [f.form for f in g.generate("deus")]
+      render: python
+  - type: input
+    id: source
+    attributes:
+      label: Authority (optional)
+      description: A grammar/dictionary supporting the expected behavior (L&S, OLD, A&G §…).
+      placeholder: "L&S s.v. deus; OLD"

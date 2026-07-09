@@ -372,12 +372,14 @@ class Generator:
         # not a true form of any single esse compound. Without this override
         # it appears as a 3sg present in sum, absum, possum, prosum, etc.
         ("necessest", "V", 5, 1): [],
-        # ``memento``/``mementote`` are imperatives of ``memini`` (perfect-only,
-        # not in our DICTLINE as a citation form). Stored under V 0 0, they
-        # would otherwise fall through to every verb's paradigm via the
-        # cascade fallback.
-        ("memento", "V", 0, 0): [],
-        ("mementote", "V", 0, 0): [],
+        # ``memento``/``mementote`` are future imperatives of ``memini``
+        # (perfect-only defective; its DICTLINE entry has a ``zzz`` present
+        # stem). Stored under V 0 0, they would cascade to every verb's paradigm
+        # via the fallback, so bind them explicitly to ``memini`` (POS-matched;
+        # the by-source index attaches them to memini's entry despite the V 0 0
+        # vs V 2 1 class mismatch).
+        ("memento", "V", 0, 0): ["memini"],
+        ("mementote", "V", 0, 0): ["memini"],
         # ``iusiurandum`` (an oath) declines BOTH halves — nom iusiurandum,
         # gen iurisiurandi, abl iureiurando — so its forms share no usable
         # stem prefix and prefix resolution orphans them, cascading into every

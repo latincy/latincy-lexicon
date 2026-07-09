@@ -80,8 +80,11 @@ def generator():
 )
 def test_regression(fixture: dict, check: dict, generator) -> None:
     """Assert a fixed edge case still behaves as its fixture records."""
-    lemma = fixture["lemma"]
-    pos = fixture.get("pos")
+    # A check may override the fixture-level lemma to assert cross-lemma
+    # behavior — e.g. that a form restored to lemma X does NOT also leak into
+    # unrelated lemma Y.
+    lemma = check.get("lemma", fixture["lemma"])
+    pos = check.get("pos", fixture.get("pos"))
     include_variants = check.get("include_variants", False)
 
     forms = {

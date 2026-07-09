@@ -48,6 +48,17 @@ argument away. Also fixes two paradigm-pollution bugs in `deus` and restores
   (POS-matched across the class mismatch), and a supplementary entry-id→UNIQUES
   index lets a unique attach to its resolved entry even when its declared class
   differs. This both stops the leak and restores `iusiurandum`'s own paradigm.
+- **`memento`/`mementote` restored to `memini`.** These future imperatives of
+  the perfect-only defective `memini` were stored under `V 0 0` and dropped to
+  avoid cascading into every verb's paradigm. They now bind explicitly to
+  `memini` (via the same POS-matched override + by-source attachment), so they
+  appear in `memini`'s paradigm and nowhere else.
+
+### Repo
+
+- **GitHub issue template** (`.github/ISSUE_TEMPLATE/bad-form-report.yml`) — a
+  structured "bad or missing form" report whose fields map directly onto a
+  `REG-*.toml` regression fixture.
 
 ## [0.8.0] — 2026-06-30
 
