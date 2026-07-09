@@ -1,0 +1,10 @@
+id = "REG-003"
+lemma = "iusiurandum"
+pos = "N"
+issue = "[lex] iusiurandum: restore forms (i/j normalization + cross-decl mismatch)"
+reason = "iusiurandum declines both halves (nom iusiurandum, gen iurisiurandi, abl iureiurando). Its UNIQUES are stored N 2 1 while the entry jusjurand is N 2 2; they are now bound explicitly to the iusiurandum lemma so its own paradigm carries the correct i-spelled forms instead of orphan-cascading into other N 2 1 nouns."
+
+# The correct i-spelled irregular forms appear in iusiurandum's own paradigm.
+[[check]]
+include_variants = false
+must_appear = ["iusiurandum", "iurisiurandi", "iureiurando"]

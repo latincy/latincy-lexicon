@@ -1,0 +1,17 @@
+id = "REG-002"
+lemma = "deus"
+pos = "N"
+issue = "Bug: citation forms sometimes capitalized (Deus); iusiurandum UNIQUES leak"
+reason = "WW stores deus as a single capitalized entry (De->Deus) conflating the Christian-God proper sense with common 'god'; the common paradigm is lowercase (standard) with Deus recoverable. Separately, the iusiurandum UNIQUES no longer orphan-cascade into deus."
+
+# Clean default: lowercase common-noun paradigm; no capitalized deity form,
+# and no iusiurandum cross-contamination.
+[[check]]
+include_variants = false
+must_appear = ["deus", "dei", "deo", "deum", "deos"]
+must_not_appear = ["Deus", "iusiurandum", "iurisiurandi", "iureiurando"]
+
+# Exhaustive: the capitalized deity-sense form is recoverable.
+[[check]]
+include_variants = true
+must_appear = ["Deus"]

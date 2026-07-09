@@ -617,16 +617,24 @@ def _reinflect_method(token: Token, **overrides: str) -> str | None:
 
 @Language.factory(
     "paradigm_generator",
-    default_config={"analyzer_path": None},
+    default_config={"analyzer_path": None, "include_variants": False},
     assigns=["token._.paradigm", "token._.reinflect"],
 )
 def create_paradigm_generator(
     nlp: Language,
     name: str,
     analyzer_path: Optional[str] = None,
+    include_variants: bool = False,
 ) -> "ParadigmGenerator":
-    """Create a paradigm generator pipeline component."""
-    return ParadigmGenerator(nlp, name, analyzer_path=analyzer_path)
+    """Create a paradigm generator pipeline component.
+
+    ``include_variants`` (default ``False``) controls whether ``token._.paradigm``
+    carries only the clean textbook paradigm or the full set including alternate
+    forms (archaic/rare/proper-sense/verb-alternate). See ``Generator.generate``.
+    """
+    return ParadigmGenerator(
+        nlp, name, analyzer_path=analyzer_path, include_variants=include_variants,
+    )
 
 
 class ParadigmGenerator:
@@ -641,11 +649,13 @@ class ParadigmGenerator:
     """
 
     def __init__(self, nlp: Language, name: str, *,
-                 analyzer_path: Optional[str] = None) -> None:
+                 analyzer_path: Optional[str] = None,
+                 include_variants: bool = False) -> None:
         self.name = name
         self._nlp = nlp
         self._generator = None
         self._analyzer_path = analyzer_path
+        self._include_variants = include_variants
 
         if not Token.has_extension("paradigm"):
             Token.set_extension("paradigm", default=None)
@@ -679,7 +689,9 @@ class ParadigmGenerator:
             cache_key = (lemma, ww_pos)
 
             if cache_key not in cache:
-                forms = self._generator.generate(lemma, pos=ww_pos)
+                forms = self._generator.generate(
+                    lemma, pos=ww_pos, include_variants=self._include_variants,
+                )
                 if forms:
                     cache[cache_key] = [
                         {"form": f.form, "lemma": f.lemma,
@@ -699,7 +711,10 @@ class ParadigmGenerator:
         path.mkdir(parents=True, exist_ok=True)
         if self._analyzer_path:
             with open(path / "generator_config.json", "w") as f:
-                json.dump({"analyzer_path": self._analyzer_path}, f)
+                json.dump({
+                    "analyzer_path": self._analyzer_path,
+                    "include_variants": self._include_variants,
+                }, f)
 
     def from_disk(self, path: str, *, exclude: tuple = ()) -> "ParadigmGenerator":
         path = Path(path)
@@ -710,11 +725,15 @@ class ParadigmGenerator:
             if cfg.get("analyzer_path"):
                 # Defer the actual Generator.from_json() until first __call__.
                 self._analyzer_path = cfg["analyzer_path"]
+            self._include_variants = cfg.get("include_variants", False)
         return self
 
     def to_bytes(self, *, exclude: tuple = ()) -> bytes:
         if self._analyzer_path:
-            return json.dumps({"analyzer_path": self._analyzer_path}).encode("utf-8")
+            return json.dumps({
+                "analyzer_path": self._analyzer_path,
+                "include_variants": self._include_variants,
+            }).encode("utf-8")
         return b""
 
     def from_bytes(self, data: bytes, *, exclude: tuple = ()) -> "ParadigmGenerator":
@@ -723,6 +742,7 @@ class ParadigmGenerator:
             if cfg.get("analyzer_path"):
                 # Defer the actual Generator.from_json() until first __call__.
                 self._analyzer_path = cfg["analyzer_path"]
+            self._include_variants = cfg.get("include_variants", False)
         return self
 
 
