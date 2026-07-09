@@ -372,12 +372,23 @@ class Generator:
         # not a true form of any single esse compound. Without this override
         # it appears as a 3sg present in sum, absum, possum, prosum, etc.
         ("necessest", "V", 5, 1): [],
-        # ``memento``/``mementote`` are imperatives of ``memini`` (perfect-only,
-        # not in our DICTLINE as a citation form). Stored under V 0 0, they
-        # would otherwise fall through to every verb's paradigm via the
-        # cascade fallback.
-        ("memento", "V", 0, 0): [],
-        ("mementote", "V", 0, 0): [],
+        # ``memento``/``mementote`` are future imperatives of ``memini``
+        # (perfect-only defective; its DICTLINE entry has a ``zzz`` present
+        # stem). Stored under V 0 0, they would cascade to every verb's paradigm
+        # via the fallback, so bind them explicitly to ``memini`` (POS-matched;
+        # the by-source index attaches them to memini's entry despite the V 0 0
+        # vs V 2 1 class mismatch).
+        ("memento", "V", 0, 0): ["memini"],
+        ("mementote", "V", 0, 0): ["memini"],
+        # ``iusiurandum`` (an oath) declines BOTH halves — nom iusiurandum,
+        # gen iurisiurandi, abl iureiurando — so its forms share no usable
+        # stem prefix and prefix resolution orphans them, cascading into every
+        # N 2 1 noun (``deus``, ``amicus``, …). They are stored N 2 1 but the
+        # DICTLINE entry ``jusjurand`` is N 2 2, so bind them explicitly to the
+        # ``iusiurandum`` lemma (POS-matched across the class mismatch).
+        ("iusiurandum", "N", 2, 1): ["iusiurandum"],
+        ("iurisiurandi", "N", 2, 1): ["iusiurandum"],
+        ("iureiurando", "N", 2, 1): ["iusiurandum"],
     }
 
     def _build_caches(self) -> None:
@@ -402,8 +413,15 @@ class Generator:
             k = (entry["pos"], entry["decl_which"], entry["decl_var"])
             entries_by_class.setdefault(k, []).append(entry)
 
-        # (pos, decl_which, decl_var) → list of UNIQUES dicts
+        # (pos, decl_which, decl_var) → list of UNIQUES dicts, plus a
+        # supplementary entry_id → UNIQUES index. The class index is how a
+        # lemma's own-class uniques are found; the by-source index lets a unique
+        # attach to the entry it *resolved* to even when its declared class
+        # differs — e.g. ``iusiurandum`` is stored ``N 2 1`` but binds to
+        # ``jusjurand`` (``N 2 2``), so generating that entry must still surface
+        # the unique despite the class mismatch.
         self._uniques_index: dict[tuple, list[dict]] = {}
+        self._uniques_by_source: dict[int, list[dict]] = {}
         for u in self._uniques:
             key = (u["pos"], u.get("decl_which", 0), u.get("decl_var", 0))
             self._uniques_index.setdefault(key, []).append(u)
@@ -413,14 +431,22 @@ class Generator:
             override_key = (u["form"], *key)
             override_lemmas = self._UNIQUE_LEMMA_OVERRIDES.get(override_key)
             if override_lemmas is not None:
+                # Match named lemma(s) by POS only, not the unique's declared
+                # class — the override exists precisely for uniques whose stored
+                # class is wrong (e.g. ``iusiurandum`` is stored N 2 1 but its
+                # entry ``jusjurand`` is N 2 2). The lemma headword is the real
+                # selector; the lemma_index lookup already pins the exact entry.
                 u["_source_entry_ids"] = {
                     e["id"]
                     for lemma in override_lemmas
                     for e in self._lemma_index.get(normalize_latin(lemma), [])
-                    if (e["pos"], e["decl_which"], e["decl_var"]) == key
+                    if e["pos"] == key[0]
                 }
             else:
                 u["_source_entry_ids"] = self._resolve_unique_source(u, entries_by_class)
+            # Index by resolved source entry id (skip orphans with None).
+            for eid in (u["_source_entry_ids"] or ()):
+                self._uniques_by_source.setdefault(eid, []).append(u)
 
     @staticmethod
     def _resolve_unique_source(
@@ -501,6 +527,7 @@ class Generator:
         *,
         pos: str | None = None,
         sort: str = "ud",
+        include_variants: bool = False,
     ) -> list[Form]:
         """Generate all inflected forms of *lemma*.
 
@@ -516,6 +543,15 @@ class Generator:
                 by traditional Latin pedagogical sequence (nom→gen→dat
                 →acc→abl→voc for nouns, present→imperfect→future for
                 verbs, etc.) — best for human-readable display.
+            include_variants: When ``False`` (default) the clean textbook
+                paradigm is returned — forms flagged ``Form.alternate`` are
+                filtered out. These are real Latin but not part of the
+                canonical paradigm: archaic/rare nominal forms (``puellabus``),
+                redundant frequency siblings (``regium``), proper-noun-sense
+                artefacts (deity ``Deus`` under common ``deus``), and verb
+                alternates (Plautine ``amasso``, archaic infinitive ``amarier``).
+                Set ``True`` to recover the full exhaustive set — best for NLP
+                consumers (form→lemma coverage) that want every attested form.
 
         Returns:
             List of Form dataclass instances, one per inflected form.
@@ -574,7 +610,41 @@ class Generator:
                         form=u["form"], lemma=lemma, upos=upos, feats=feats,
                     ))
 
+        # Attach UNIQUES bound to this lemma's entries by resolved source id,
+        # regardless of their declared class. Covers cross-class-labelled
+        # uniques (e.g. ``iusiurandum`` stored N 2 1 but bound to ``jusjurand``
+        # N 2 2) that the class-keyed loop above cannot reach.
+        for entry in entries:
+            for u in self._uniques_by_source.get(entry["id"], []):
+                if not u["form"]:
+                    continue
+                feats = _build_feats(u, u["pos"])
+                key = (u["form"], feats)
+                if key not in seen:
+                    seen.add(key)
+                    all_forms.append(Form(
+                        form=u["form"], lemma=lemma, upos=_ud_pos(entry),
+                        feats=feats,
+                    ))
+
         all_forms = _drop_fake_comparatives(all_forms)
+        if not include_variants:
+            # Filter alternates only for NON-verb forms, where the ``alternate``
+            # flag is reliable (nominal archaisms like ``puellabus``, frequency
+            # siblings like ``regium``, proper-sense caps like ``Deus``). The
+            # verb-alternate discriminator (``is_verb_form_alternate``) currently
+            # over-flags the STANDARD forms of irregular verbs — ``esse``,
+            # ``posse``, the whole present system of ``eo``/``edo``,
+            # ``fers``/``fert`` — so filtering verb alternates by default would
+            # drop core paradigm forms of the most common Latin verbs. Verb
+            # forms therefore stay exhaustive by default until that discriminator
+            # is trustworthy (tracked follow-up); ``include_variants`` is moot
+            # for them. Their ``alternate`` metadata is still exposed for
+            # consumers that opt into it.
+            all_forms = [
+                f for f in all_forms
+                if not f.alternate or f.upos in ("VERB", "AUX")
+            ]
         if sort == "paradigm":
             all_forms.sort(key=_paradigm_sort_key)
         return all_forms
@@ -659,12 +729,12 @@ class Generator:
             allow_locative = self._entry_allows_locative(entry)
             matching = self._matching_rules(entry)
             # Pre-scan: which (case, number, stem_key) slots have a freq='A'
-            # rule? We use this to suppress alternate forms (freq B/C/D) when
-            # the standard form is already present — e.g. ``regium`` (N 3 1
-            # GEN P -ium freq=B) is a redundant alternate to ``regum`` (-um
-            # freq=A) for consonant-stem 3rd-decl nouns. Orphan archaic forms
-            # without an A-frequency sibling (e.g. ``puellabus`` 1st-decl
-            # dat/abl plural -abus freq=B age=D) are preserved.
+            # rule? We use this to flag redundant alternate forms (freq B/C/D)
+            # as ``alternate`` when the standard form is already present —
+            # e.g. ``regium`` (N 3 1 GEN P -ium freq=B) is a redundant alternate
+            # to ``regum`` (-um freq=A) for consonant-stem 3rd-decl nouns.
+            # Orphan forms without an A-frequency sibling stay ``alternate=False``
+            # via the freq check unless their age code marks them archaic.
             covered_slots = {
                 (r.get("case_val"), r.get("number"), r["stem_key"])
                 for r in matching
@@ -678,25 +748,31 @@ class Generator:
                 # ``Case=Loc`` rex/rege/regibus on common nouns.
                 if not allow_locative and rule.get("case_val") == "LOC":
                     continue
-                # Suppress period-specific rules (age != 'X') for nominal
-                # paradigms. WW marks rare/archaic/late variants with explicit
-                # age codes — e.g. ``rege`` as DAT singular is `age='B'` (early
-                # Latin), which pollutes the standard paradigm with a form
-                # that's actually the ablative. Keep only age='X' (universal)
-                # rules for the canonical textbook paradigm.
+                # Non-standard forms are EMITTED but flagged ``alternate=True``
+                # so the default clean paradigm can hide them while
+                # ``include_variants=True`` recovers them (see ``generate``).
+                # Two rule-level classes flag as alternate:
+                alternate = False
+                # (a) period-specific rules (age != 'X') — archaic/early/late
+                #     variants like ``rege`` as DAT singular (age='B', really
+                #     the ablative) or the 1st-decl dat/abl pl ``puellabus``
+                #     (-abus, age='D'). These pollute the textbook paradigm but
+                #     are real Latin worth recovering on request.
                 if rule.get("age", "X") != "X":
-                    continue
-                # Suppress redundant alternate forms (freq != 'A') when the
-                # same slot already has a standard freq='A' rule.
+                    alternate = True
+                # (b) redundant alternate forms (freq != 'A') when the same slot
+                #     already has a standard freq='A' rule — e.g. ``regium`` (gen
+                #     pl -ium freq=B) shadowed by ``regum`` (-um freq=A).
                 if rule.get("freq") != "A":
                     slot = (rule.get("case_val"), rule.get("number"), rule["stem_key"])
                     if slot in covered_slots:
-                        continue
+                        alternate = True
                 # Suppress rules whose gender conflicts with a noun's inherent
                 # gender — e.g. common-gender ``-es`` plural rules on neuter
                 # ``carmen`` would otherwise emit a spurious ``carmines``.
                 # Adjectives/pronouns/numerals legitimately inflect for all
-                # genders, so this applies to nouns only.
+                # genders, so this applies to nouns only. (Hard drop: these are
+                # nonsensical, not real-but-nonstandard.)
                 if pos == "N" and not _gender_compatible(
                     rule.get("gender", "X"), entry.get("gender", "X")
                 ):
@@ -707,7 +783,29 @@ class Generator:
                 ending = rule.get("ending", "")
                 surface = stem + ending
                 feats = _build_feats(rule, pos, entry)
-                forms.append(Form(form=surface, lemma=lemma, upos=upos, feats=feats))
+                # (c) proper-noun-sense artefact: a capitalized surface under a
+                #     lowercase (common-noun) lemma. WW stores ``deus`` as a
+                #     single capitalized entry (``De``→``Deus``) that conflates
+                #     the Christian-God proper sense with the common "god". For
+                #     the common noun's paradigm the lowercase form is standard
+                #     and the capitalized form is a proper/deity variant, so we
+                #     emit BOTH: lowercase (inheriting any age/freq alternate
+                #     status) plus the capitalized surface as alternate. Proper
+                #     nouns (lemma itself capitalized, e.g. ``Roma``) are exempt.
+                if surface[:1].isupper() and not lemma[:1].isupper():
+                    forms.append(Form(
+                        form=surface.lower(), lemma=lemma, upos=upos,
+                        feats=feats, alternate=alternate,
+                    ))
+                    forms.append(Form(
+                        form=surface, lemma=lemma, upos=upos, feats=feats,
+                        alternate=True,
+                    ))
+                else:
+                    forms.append(Form(
+                        form=surface, lemma=lemma, upos=upos, feats=feats,
+                        alternate=alternate,
+                    ))
 
         return forms
 
@@ -790,6 +888,11 @@ class Generator:
         form to its lemma. First-lemma-wins: if two lemmas produce the same
         surface form, the first lemma in *lemmas* keeps the mapping.
 
+        Uses ``include_variants=True`` so the lookup table stays exhaustive —
+        archaic/rare/alternate surfaces are exactly what a form→lemma
+        lemmatizer supplement needs to cover, even though they are hidden from
+        the default clean paradigm.
+
         Args:
             lemmas: List of citation forms to generate.
             pos: Optional WW POS filter passed to :meth:`generate`.
@@ -799,7 +902,7 @@ class Generator:
         """
         result: dict[str, str] = {}
         for lemma in lemmas:
-            for f in self.generate(lemma, pos=pos):
+            for f in self.generate(lemma, pos=pos, include_variants=True):
                 if f.form not in result:
                     result[f.form] = f.lemma
         return result

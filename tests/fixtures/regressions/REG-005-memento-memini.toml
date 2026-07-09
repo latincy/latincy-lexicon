@@ -1,0 +1,16 @@
+id = "REG-005"
+lemma = "memini"
+pos = "V"
+issue = "[lex] memento/mementote: restore to memini paradigm (V 0 0 cascade)"
+reason = "memento/mementote are future imperatives of the perfect-only defective memini (zzz present stem). Stored under V 0 0, they previously cascaded to every verb and were dropped; now bound explicitly to memini and attached via the by-source index."
+
+# The future imperatives appear in memini's own paradigm.
+[[check]]
+include_variants = false
+must_appear = ["memento", "mementote", "memini", "meminisse"]
+
+# Cascade guard: memento must NOT leak into an unrelated verb's paradigm.
+[[check]]
+lemma = "amo"
+include_variants = true
+must_not_appear = ["memento", "mementote"]

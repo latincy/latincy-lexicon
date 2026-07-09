@@ -1,6 +1,6 @@
 """latincy-lexicon: Whitaker's Words data for LatinCy."""
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 from latincy_lexicon.build import build_lexicon, senses_path, sense_index_path  # noqa: F401
 from latincy_lexicon.models import LewisShortSense  # noqa: F401

@@ -1,0 +1,16 @@
+id = "REG-001"
+lemma = "puella"
+pos = "N"
+issue = "[lex] puellabus/filiabus/deabus: archaic -abus forms allowlist"
+reason = "1st-decl archaic dat/abl pl -abus (and -ai/-ad/-um) are age-coded; they now flag alternate (hidden from the clean paradigm) and are recoverable via include_variants."
+
+# Clean default: the textbook paradigm, no archaic forms.
+[[check]]
+include_variants = false
+must_appear = ["puella", "puellae", "puellam", "puellas", "puellarum", "puellis"]
+must_not_appear = ["puellabus", "puellai"]
+
+# Exhaustive: the archaic -abus (and other age-coded) forms come back.
+[[check]]
+include_variants = true
+must_appear = ["puellabus", "puellai"]

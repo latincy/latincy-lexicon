@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Lexicon" width="400">
 
-[![PyPI version](https://img.shields.io/pypi/v/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.9.0-orange.svg)](https://pypi.org/project/latincy-lexicon/)
 [![Python versions](https://img.shields.io/pypi/pyversions/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -123,7 +123,7 @@ for token in doc:
 
 Token extensions:
 
-- `token._.paradigm` — list of all inflected forms for the token's lemma, each with `form`, `lemma`, `upos`, and `feats` (dict of UD features). `None` for punctuation or unknown lemmas.
+- `token._.paradigm` — list of inflected forms for the token's lemma, each with `form`, `lemma`, `upos`, `feats` (dict of UD features), and `alternate` (bool). `None` for punctuation or unknown lemmas. By default only the clean paradigm is exposed; pass `config={"include_variants": True}` to `add_pipe` to include alternate forms.
 - `token._.reinflect(**overrides)` — returns a surface form matching the token's current morphology merged with the provided UD feature overrides, or `None` if no match exists.
 
 ```python
@@ -165,13 +165,16 @@ Each `Form` has five fields: `form` (surface), `lemma` (citation), `upos` (UD PO
 
 ### Canonical vs. alternate forms
 
-`generate()` is exhaustive — it returns every form Whitaker's data can produce, including ones outside the standard textbook paradigm: Plautine sigmatic forms (`amasso`), archaic infinitives (`amarier`), and wrong-stem artefacts. Each such form is flagged `alternate=True`, so a clean paradigm is one filter away:
+By default `generate()` returns the **clean textbook paradigm**. Forms outside the standard paradigm — archaic/rare nominal forms (`puellabus`, `puellai`), redundant frequency siblings (`regium`), and proper-sense capitalizations (`Deus` under the common noun `deus`) — are flagged `alternate=True` and filtered out. Pass `include_variants=True` for the exhaustive set:
 
 ```python
-canonical = [f for f in gen.generate("amo") if not f.alternate]
+clean = gen.generate("puella")                         # textbook paradigm
+full  = gen.generate("puella", include_variants=True)  # + puellabus, puellai, …
 ```
 
-This keeps the full set available for NLP while letting a paradigm viewer show only the canonical forms.
+Every `Form` still carries the `alternate` flag, so a consumer can inspect or re-filter as needed. `to_lookup_dict()` uses the exhaustive set automatically, so form→lemma coverage stays maximal for NLP.
+
+**Note on verbs:** verb forms are currently returned exhaustively even by default (`include_variants` does not yet filter them). The verb-alternate detector over-flags the standard forms of *irregular* verbs — `esse`, `posse`, the present system of `eo`, `fers`/`fert` — so filtering verb alternates is not yet reliable and is deferred to a future release. The `alternate` flag on verb forms should therefore be treated as advisory.
 
 ## Acknowledgments
 
