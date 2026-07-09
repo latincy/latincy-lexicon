@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.9.0] — 2026-07-09
+
+Makes `Form.alternate` load-bearing: the generator now routes real-but-nonstandard
+nominal forms into that flag instead of dropping them, and `generate()` returns
+the clean textbook paradigm by default while keeping the full exhaustive set one
+argument away. Also fixes two paradigm-pollution bugs in `deus` and restores
+`iusiurandum`.
+
+### Added
+
+- **`Generator.generate(..., include_variants=False)`** — new keyword. The
+  default returns the clean paradigm (nominal archaisms, frequency siblings, and
+  proper-sense capitalizations filtered out); `include_variants=True` returns the
+  full exhaustive set, best for NLP consumers that want every attested surface.
+  `to_lookup_dict` uses `include_variants=True` so form→lemma coverage is
+  unchanged.
+- **`paradigm_generator` spaCy component** gains an `include_variants` config
+  option (default `False`), persisted across `to_disk`/`to_bytes`.
+- **Regression-fixture harness** (`tests/test_regressions.py` +
+  `tests/fixtures/regressions/REG-*.toml`) — each fixed paradigm edge case is one
+  declarative TOML fixture and one parametrized test, mirroring the `OVR-*.toml`
+  override convention. The regression surface grows by data, not code.
+
+### Changed
+
+- Non-verb archaic/rare forms (1st-decl `-abus` `puellabus`, poetic `-ai`
+  `puellai`, `-ium` frequency siblings like `regium`) are now emitted with
+  `Form.alternate=True` and hidden from the default paradigm, rather than being
+  discarded outright. They are fully recoverable via `include_variants=True`.
+- `deus`: WW stores a single capitalized entry (`De`→`Deus`) that conflates the
+  Christian-God proper sense with the common noun. The common paradigm now emits
+  lowercase forms (`deus`, `dei`, `deo`, …) as standard, with the capitalized
+  deity form flagged alternate (recoverable via `include_variants`).
+- Default filtering applies to **non-verb** alternates only. The verb-alternate
+  discriminator currently over-flags the standard forms of irregular verbs
+  (`esse`, `posse`, the present system of `eo`/`edo`, `fers`/`fert`), so verb
+  forms remain exhaustive by default until that discriminator is corrected.
+
+### Fixed
+
+- **`iusiurandum` no longer leaks into every 2nd-declension noun.** Its UNIQUES
+  are stored `N 2 1` while the DICTLINE entry `jusjurand` is `N 2 2`, so prefix
+  resolution orphaned them and they cascaded into `deus`, `amicus`, and every
+  other N 2 1 noun. The four i-spelled forms (`iusiurandum`, `iurisiurandi`,
+  `iureiurando`) are now bound explicitly to the `iusiurandum` lemma
+  (POS-matched across the class mismatch), and a supplementary entry-id→UNIQUES
+  index lets a unique attach to its resolved entry even when its declared class
+  differs. This both stops the leak and restores `iusiurandum`'s own paradigm.
+
 ## [0.8.0] — 2026-06-30
 
 Upstreams the paradigm corrections that the `latincy-lexicon-site` viewer
