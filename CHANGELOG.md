@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.1] — 2026-07-11
+
+GitHub tag only (not published to PyPI; the fix ships to PyPI with 0.10.0).
+
+### Fixed
+- **whitakers_words**: lemma-matched lexicon entries now outrank entries added
+  via inflectional parses of the surface form in `token._.lexicon` ranking.
+  Previously a same-POS homograph reached only through a surface parse could
+  win on raw frequency — form `dea` (lemma `dea`, freq C) also parses under
+  `deus` (freq A), so `token._.lexicon[0]` was the `deus` entry and downstream
+  citation forms came out as `deus, dei, m.` instead of `dea, deae, f.`
+  Inflection-matched homographs remain available lower in the list.
+
 ## [0.9.0] — 2026-07-09
 
 Makes `Form.alternate` load-bearing: the generator now routes real-but-nonstandard

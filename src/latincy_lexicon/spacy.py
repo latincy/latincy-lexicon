@@ -762,14 +762,27 @@ _FREQ_SCORE = {"A": 1.0, "B": 0.8, "C": 0.6, "D": 0.4, "E": 0.2, "F": 0.1, "X": 
 
 
 def _rank_by_pos(entries: list, token_pos: str) -> list:
-    """Rank lexicon entries: POS-matching first, then by frequency."""
+    """Rank lexicon entries: POS-matching first, then lemma-matched, then by
+    frequency.
+
+    Within each POS group, entries found via the token's lemma outrank entries
+    added via inflectional parses of the surface form. The lemmatizer already
+    committed to a lemma; a same-POS homograph reached only through a surface
+    parse (form ``dea`` also parsing under ``deus``) must not beat it on raw
+    frequency, or downstream citation forms pick the wrong entry.
+    """
+    def _key(e: dict) -> tuple:
+        return (
+            e.get("match_type") == "inflection",
+            -_FREQ_SCORE.get(e.get("freq", "X"), 0.3),
+        )
+
     if not token_pos:
-        return sorted(entries, key=lambda e: -_FREQ_SCORE.get(e.get("freq", "X"), 0.3))
+        return sorted(entries, key=_key)
     matching = [e for e in entries if token_pos in e.get("ud_pos", [])]
     other = [e for e in entries if token_pos not in e.get("ud_pos", [])]
-    # Within each group, sort by frequency (A > B > ... > X)
-    matching.sort(key=lambda e: -_FREQ_SCORE.get(e.get("freq", "X"), 0.3))
-    other.sort(key=lambda e: -_FREQ_SCORE.get(e.get("freq", "X"), 0.3))
+    matching.sort(key=_key)
+    other.sort(key=_key)
     return matching + other
 
 

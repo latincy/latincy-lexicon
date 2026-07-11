@@ -101,6 +101,26 @@ def test_bonus_no_regression_on_lemma_match(nlp):
     assert len(raw) == len(set(raw)), f"duplicate entries: {raw}"
 
 
+def test_lemma_match_outranks_inflection_homograph(nlp):
+    """Form `dea`, lemma=dea: the analyzer also parses `dea` under the
+    headword `deus`, whose entry has higher frequency (A vs. C). The
+    lemma-matched `dea` entry must still rank first, or downstream
+    citation forms come out as `deus, dei, m.` (viewer §197 bug). The
+    deus entry stays available further down the list."""
+    from spacy.tokens import Doc
+
+    doc = nlp(Doc(nlp.vocab, words=["dea"], lemmas=["dea"], pos=["NOUN"]))
+    entries = doc[0]._.lexicon or []
+    headwords = [e["headword"] for e in entries]
+    assert headwords and headwords[0] == "dea", (
+        f"lemma-matched dea must rank first; got {headwords}"
+    )
+    assert entries[0].get("gender") == "F"
+    assert "deus" in headwords[1:], (
+        f"deus should remain as a lower-ranked inflection match; got {headwords}"
+    )
+
+
 def test_gloss_falls_back_to_lexicon_when_parse_misses(nlp):
     """`iustitia`'s surface form isn't segmented by the analyzer, so the
     parse-based gloss is empty — but the lemma-keyed lexicon entry carries a
