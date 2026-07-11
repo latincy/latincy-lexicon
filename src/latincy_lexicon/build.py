@@ -45,6 +45,22 @@ _SOURCE_PRIORITY: dict[str, int] = {
     "X": 1,   # Unknown
 }
 
+# Whitaker frequency-code rank for dedup tiebreaking. Higher = more frequent =
+# more authoritative. Breaks ties *within* a source-priority tie, so the
+# canonical high-frequency homograph wins over a rarer duplicate that shares
+# (headword, pos, glosses) — e.g. `pario` (bear/give birth) ships as both a
+# freq-A entry (peperi/partum) and a freq-E entry (parire/paritum) from the
+# same source; without this the first-listed freq-E stub would win.
+_FREQ_PRIORITY: dict[str, int] = {
+    "A": 7,  # very frequent
+    "B": 6,
+    "C": 5,
+    "D": 4,
+    "E": 3,
+    "F": 2,  # rare
+    "X": 1,  # unknown / unranked (also N, I, etc. fall through to default 0)
+}
+
 
 # ---------------------------------------------------------------------------
 # Locate bundled data files
@@ -241,22 +257,47 @@ def _apply_overrides(
 
 
 def _apply_one_override(entries: list[dict], ovr: dict) -> None:
-    """Apply a single parsed override to `entries` in place."""
+    """Apply a single parsed override to `entries` in place.
+
+    ``[change]`` may be a single table or an array-of-tables (``[[change]]``);
+    the latter lets one override edit several fields of the same entry as one
+    attributable record (e.g. backfilling both ``stem3`` and ``stem4`` of a
+    truncated stub). The ``[target]`` may carry optional ``decl_which`` /
+    ``decl_var`` to disambiguate homographs sharing (stem1, pos).
+    """
     ovr_id = ovr["id"]
     target = ovr["target"]
-    change = ovr["change"]
-    field = change["field"]
 
-    target_entry = _find_entry(entries, target["lemma"], target["pos"])
+    target_entry = _find_entry(
+        entries, target["lemma"], target["pos"],
+        decl_which=target.get("decl_which"), decl_var=target.get("decl_var"),
+    )
     if target_entry is None:
         raise ValueError(
             f"{ovr_id}: target entry not found "
             f"(lemma={target['lemma']!r}, pos={target['pos']!r})"
         )
 
+    changes = ovr["change"]
+    if isinstance(changes, dict):
+        changes = [changes]
+    for change in changes:
+        _apply_one_change(entries, ovr, target_entry, change)
+
+
+def _apply_one_change(
+    entries: list[dict], ovr: dict, target_entry: dict, change: dict,
+) -> None:
+    """Apply one field change (borrow_from or literal) to ``target_entry``."""
+    ovr_id = ovr["id"]
+    field = change["field"]
+
     if "borrow_from" in change:
         borrow = change["borrow_from"]
-        source_entry = _find_entry(entries, borrow["lemma"], borrow["pos"])
+        source_entry = _find_entry(
+            entries, borrow["lemma"], borrow["pos"],
+            decl_which=borrow.get("decl_which"), decl_var=borrow.get("decl_var"),
+        )
         if source_entry is None:
             raise ValueError(
                 f"{ovr_id}: borrow_from source not found "
@@ -292,12 +333,22 @@ def _apply_one_override(entries: list[dict], ovr: dict) -> None:
 
 
 def _find_entry(
-    entries: list[dict], lemma: str, pos: str
+    entries: list[dict], lemma: str, pos: str,
+    *, decl_which: int | None = None, decl_var: int | None = None,
 ) -> dict | None:
-    """Return the first entry whose stem1 matches lemma and pos matches."""
+    """Return the first entry matching stem1==lemma and pos.
+
+    When ``decl_which`` / ``decl_var`` are given, they further constrain the
+    match so an override can target one of several homographs.
+    """
     for e in entries:
-        if e.get("stem1") == lemma and e.get("pos") == pos:
-            return e
+        if e.get("stem1") != lemma or e.get("pos") != pos:
+            continue
+        if decl_which is not None and e.get("decl_which") != decl_which:
+            continue
+        if decl_var is not None and e.get("decl_var") != decl_var:
+            continue
+        return e
     return None
 
 
@@ -1026,6 +1077,19 @@ def _clean_glosses(
     return glosses, source_refs, gloss_orig
 
 
+def _dedup_rank(entry: dict) -> tuple[int, int]:
+    """Authority rank for dedup tiebreaking: (source priority, frequency).
+
+    Source dominates (classical dictionaries outrank Whitaker overlays); when
+    two duplicates share a source, the more frequent one wins so the canonical
+    homograph beats a rarer stub with identical (headword, pos, glosses).
+    """
+    return (
+        _SOURCE_PRIORITY.get(entry.get("source", "X"), 0),
+        _FREQ_PRIORITY.get(entry.get("freq", "X"), 0),
+    )
+
+
 def _build_lexicon_dict(
     entries: list[dict],
     addons: list[dict],
@@ -1096,9 +1160,11 @@ def _build_lexicon_dict(
         # that agree on those fields but disagree on stems — e.g. the Oxford
         # entry for `cano` (stems can/can/cecin/cant) vs. the Whitaker-custom
         # entry (stems can/can/can/canit) — prefer whichever has the more
-        # authoritative source. Without this, whichever entry DICTLINE lists
-        # first wins, and we've seen the bad one win for reduplicated-perfect
-        # verbs like cano.
+        # authoritative source, and break source ties by frequency so the
+        # canonical high-frequency homograph wins over a rarer duplicate (e.g.
+        # `pario` freq-A peperi/partum over freq-E parire/paritum, same source).
+        # Without this, whichever entry DICTLINE lists first wins, and we've
+        # seen the bad one win for reduplicated-perfect verbs like cano/pario.
         existing = lexicon.setdefault(normalized, [])
         dup_idx = next(
             (
@@ -1111,11 +1177,8 @@ def _build_lexicon_dict(
         )
         if dup_idx is None:
             existing.append(lex_entry)
-        else:
-            old_rank = _SOURCE_PRIORITY.get(existing[dup_idx].get("source", "X"), 0)
-            new_rank = _SOURCE_PRIORITY.get(lex_entry.get("source", "X"), 0)
-            if new_rank > old_rank:
-                existing[dup_idx] = lex_entry
+        elif _dedup_rank(lex_entry) > _dedup_rank(existing[dup_idx]):
+            existing[dup_idx] = lex_entry
 
     # Pluralia tantum
     from latincy_lexicon.align.pluralia import apply_plural_mappings

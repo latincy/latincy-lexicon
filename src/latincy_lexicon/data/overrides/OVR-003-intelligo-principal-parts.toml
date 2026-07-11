@@ -1,0 +1,37 @@
+id = "OVR-003"
+date = 2026-07-11
+author = "patrick@diyclassics.org"
+status = "active"
+
+[target]
+lemma = "intellig"        # stem1 of the i-spelling entry (intelligo)
+pos = "V"
+decl_which = 3
+decl_var = 1
+
+# Two field changes, applied as one attributable record: backfill the missing
+# perfect and supine stems from the canonical e-spelling twin (intellego).
+[[change]]
+field = "stem3"
+borrow_from = { lemma = "intelleg", pos = "V", decl_which = 3, decl_var = 1, field = "stem3" }
+
+[[change]]
+field = "stem4"
+borrow_from = { lemma = "intelleg", pos = "V", decl_which = 3, decl_var = 1, field = "stem4" }
+
+reason = """
+Whitaker's Words ships the medieval i-spelling `intelligo` (DICTLINE stem1
+`intellig`, V 3 1, freq D) as a present-only stub: stem3 and stem4 are both the
+`zzz` placeholder, so its citation truncates to `intelligo, intelligere` with no
+perfect or supine. The canonical e-spelling entry `intellego` (stem1 `intelleg`,
+V 3 1, freq A) carries the full paradigm (`intelleg/intelleg/intellex/intellect`
+-> intellego, intellegere, intellexi, intellectum).
+
+The two spellings are the same verb; the perfect (`intellex-` -> intellexi) and
+supine (`intellect-` -> intellectum) are identical regardless of present-stem
+spelling. Borrowing them completes the i-spelling citation to
+`intelligo, intelligere, intellexi, intellectum` while preserving the i-spelling
+present system. Needed because LatinCy lemmatizes intellig- forms to the medieval
+`intelligo`, so the stub is what surfaces on vocab cards.
+"""
+reason_short = "Backfill intelligo stub's perfect+supine stems from canonical intellego."

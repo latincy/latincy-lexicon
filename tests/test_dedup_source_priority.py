@@ -53,3 +53,25 @@ def test_dedup_preserves_cross_pos_entries(lexicon):
         pos_counts[e["pos"]] = pos_counts.get(e["pos"], 0) + 1
     assert pos_counts.get("ADJ", 0) >= 1
     assert pos_counts.get("N", 0) >= 1
+
+
+def test_pario_keeps_frequency_a_homograph(lexicon):
+    """DICTLINE lists pario (bear/give birth) at freq E (parire/paritum)
+    before an identical-gloss freq A entry (parere/peperi/partum), both from
+    source O. Source-priority alone can't split them; the frequency tiebreak
+    must keep the freq-A entry so the citation is the classical
+    `pario, parere, peperi, partum`, not the first-seen freq-E stub."""
+    from latincy_lexicon.principal_parts import format_principal_parts
+
+    entries = _verb_entries(lexicon, "pario")
+    # The give-birth homograph (peper- perfect) and the rare 1st-conj denominal
+    # (pariav-) are genuine polysemy and both survive; the give-birth one must
+    # carry the freq-A stems and rank ahead of the denominal.
+    give_birth = [e for e in entries if "peper" in e["principal_parts"]]
+    assert give_birth, f"pario give-birth homograph dropped: {entries}"
+    e = give_birth[0]
+    assert e["freq"] == "A", f"expected freq-A survivor, got {e['freq']}"
+    assert "part" in e["principal_parts"], (
+        f"expected classical supine 'part', got {e['principal_parts']}"
+    )
+    assert format_principal_parts(e) == "pario, parere, peperi, partum"

@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Lexicon" width="400">
 
-[![PyPI version](https://img.shields.io/badge/pypi-v0.10.0-orange.svg)](https://pypi.org/project/latincy-lexicon/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.10.1-orange.svg)](https://pypi.org/project/latincy-lexicon/)
 [![Python versions](https://img.shields.io/pypi/pyversions/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)

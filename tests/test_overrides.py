@@ -127,6 +127,98 @@ reason = "test"
     assert foo["_overrides"][0]["original_value"] == "original;"
 
 
+def test_apply_overrides_multi_change(tmp_path: Path) -> None:
+    """An override with an array-of-tables `[[change]]` applies every field
+    change as one attributable record (e.g. backfilling both stem3 and stem4
+    of a truncated stub), recording one provenance entry per change."""
+    entries = [
+        _entry("intellig", "V", "understand;", id=1,
+               decl_which=3, decl_var=1, stem2="intellig", stem3="zzz", stem4="zzz"),
+        _entry("intelleg", "V", "understand;", id=2,
+               decl_which=3, decl_var=1, stem2="intelleg",
+               stem3="intellex", stem4="intellect"),
+    ]
+    ovr_dir = tmp_path / "overrides"
+    ovr_dir.mkdir()
+    (ovr_dir / "OVR-003-multi.toml").write_text(
+        """
+id = "OVR-003"
+date = 2026-07-11
+author = "test"
+status = "active"
+
+[target]
+lemma = "intellig"
+pos = "V"
+decl_which = 3
+decl_var = 1
+
+[[change]]
+field = "stem3"
+borrow_from = { lemma = "intelleg", pos = "V", decl_which = 3, decl_var = 1, field = "stem3" }
+
+[[change]]
+field = "stem4"
+borrow_from = { lemma = "intelleg", pos = "V", decl_which = 3, decl_var = 1, field = "stem4" }
+
+reason = "test"
+reason_short = "test"
+""".strip()
+    )
+
+    _apply_overrides(entries, ovr_dir)
+
+    stub = next(e for e in entries if e["stem1"] == "intellig")
+    assert stub["stem3"] == "intellex"
+    assert stub["stem4"] == "intellect"
+    ovrs = stub["_overrides"]
+    assert [o["field"] for o in ovrs] == ["stem3", "stem4"]
+    assert all(o["id"] == "OVR-003" for o in ovrs)
+    assert ovrs[0]["original_value"] == "zzz"
+    # source entry untouched
+    src = next(e for e in entries if e["stem1"] == "intelleg")
+    assert "_overrides" not in src
+
+
+def test_apply_overrides_homograph_disambiguation(tmp_path: Path) -> None:
+    """`decl_which`/`decl_var` in the target pick one of several homographs
+    sharing (stem1, pos); without them `_find_entry` returns the first."""
+    entries = [
+        _entry("pari", "V", "acquire;", id=1, decl_which=1, decl_var=1, freq="D"),
+        _entry("pari", "V", "give birth;", id=2, decl_which=3, decl_var=1, freq="A"),
+    ]
+    ovr_dir = tmp_path / "overrides"
+    ovr_dir.mkdir()
+    (ovr_dir / "OVR-x.toml").write_text(
+        """
+id = "OVR-X"
+date = 2026-07-11
+author = "test"
+status = "active"
+
+[target]
+lemma = "pari"
+pos = "V"
+decl_which = 3
+decl_var = 1
+
+[change]
+field = "freq"
+to = "B"
+
+reason = "test"
+""".strip()
+    )
+
+    _apply_overrides(entries, ovr_dir)
+
+    denominal = next(e for e in entries if e["decl_which"] == 1)
+    give_birth = next(e for e in entries if e["decl_which"] == 3)
+    assert give_birth["freq"] == "B"          # targeted homograph changed
+    assert denominal["freq"] == "D"           # other homograph untouched
+    assert "_overrides" not in denominal
+
+
 def test_apply_overrides_skips_non_active(tmp_path: Path) -> None:
     """Overrides with status != "active" (reverted, superseded) must not
     affect entries."""
@@ -311,3 +403,40 @@ def test_ovr_002_nepos_noun_gender_in_lexicon(lexicon: dict) -> None:
     assert ovr_002.get("original_value") == "C", (
         "OVR-002 should record original WW value C in original_value"
     )
+
+
+# ---------------------------------------------------------------------------
+# Integration — OVR-003 against a fresh build (not the gitignored local export)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def built_lexicon(tmp_path_factory) -> dict:
+    from latincy_lexicon.build import build
+
+    out = tmp_path_factory.mktemp("lex")
+    build(output_dir=out)
+    return json.loads((out / "lexicon.json").read_text())
+
+
+def test_ovr_003_intelligo_principal_parts(built_lexicon: dict) -> None:
+    """The i-spelling `intelligo` stub gets its perfect + supine stems
+    backfilled from canonical `intellego`, so its citation is the complete
+    `intelligo, intelligere, intellexi, intellectum` — carrying OVR-003
+    provenance on both stem fields — while `intellego` is untouched."""
+    from latincy_lexicon.principal_parts import format_principal_parts
+
+    entries = [e for e in built_lexicon.get("intelligo", []) if e.get("pos") == "V"]
+    assert entries, "intelligo verb entry missing from lexicon"
+    e = entries[0]
+    assert e["principal_parts"] == ["intellig", "intellig", "intellex", "intellect"]
+    assert format_principal_parts(e) == "intelligo, intelligere, intellexi, intellectum"
+
+    ovr_fields = [o["field"] for o in e.get("_overrides", []) if o["id"] == "OVR-003"]
+    assert set(ovr_fields) == {"stem3", "stem4"}, (
+        f"expected OVR-003 provenance on stem3+stem4, got {ovr_fields}"
+    )
+
+    # Canonical e-spelling entry is the borrow source, not a target.
+    intellego = [e for e in built_lexicon.get("intellego", []) if e.get("pos") == "V"]
+    assert intellego and not intellego[0].get("_overrides")

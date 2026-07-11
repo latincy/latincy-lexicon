@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.10.1] — 2026-07-11
+
+Citation-form corrections surfaced during a latincy-viewer run, both traced to
+homograph handling in the build.
+
+### Fixed
+- **build**: the (headword, pos, glosses) dedup now breaks source-priority ties
+  by frequency, so the canonical high-frequency homograph wins over a rarer
+  duplicate. `pario` (bear/give birth) shipped as both a freq-A entry
+  (`peperi`/`partum`) and a freq-E entry (`parire`/`paritum`) from the same
+  source; first-seen kept the freq-E stub, citing `pario, pariare, pariavi,
+  pariatum` (conflated with the rare 1st-conj denominal). It now cites the
+  classical `pario, parere, peperi, partum`.
+- **lexicon data (OVR-003)**: the medieval i-spelling `intelligo` shipped as a
+  present-only stub (stem3/stem4 = Whitaker `zzz`), truncating its citation to
+  `intelligo, intelligere`. Its perfect + supine stems are backfilled from the
+  canonical `intellego`, giving `intelligo, intelligere, intellexi,
+  intellectum`. (LatinCy lemmatizes `intellig-` forms to the i-spelling, so the
+  stub is what reached vocab cards.)
+
+### Added
+- **overrides**: `[change]` may now be an array-of-tables (`[[change]]`) so one
+  override edits several fields of an entry as a single attributable record;
+  `[target]` accepts optional `decl_which`/`decl_var` to disambiguate
+  homographs sharing (stem1, pos).
+
+### Not a bug (documented)
+- `revertor`: the lexicon returns the correct citation for whichever lemma it
+  is given (deponent lemma → `revertor, reverti, reversus sum`; active lemma →
+  `reverto, revertere, reverti`, both u/v spellings). A viewer showing the
+  active citation for a deponent form is a LatinCy model lemmatization issue,
+  not a lexicon one.
+
 ## [0.10.0] — 2026-07-11
 
 Surfaces the Lewis & Short sense store (84,091 senses / 42,982 entries) from

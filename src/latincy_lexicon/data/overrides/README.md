@@ -32,8 +32,10 @@ status = "active"                   # active | superseded | reverted
 # supersedes = "OVR-MMM"
 
 [target]
-lemma = "neque"                     # headword to match
+lemma = "neque"                     # headword to match (against entry stem1)
 pos = "CONJ"                        # POS to disambiguate homographs
+# decl_which = 3                    # optional — pin one homograph sharing
+# decl_var = 1                      #   (stem1, pos) when several exist
 
 [change]
 field = "meaning"                   # the DictEntry field to replace
@@ -63,6 +65,31 @@ refs = [
     "https://github.com/latincy/latincy-lexicon/issues/NN",
 ]
 ```
+
+### Multiple field changes in one override
+
+Use an array-of-tables (`[[change]]`) to edit several fields of the same target
+entry as one attributable record — each change gets its own provenance entry
+under `_overrides`. `borrow_from` uses an inline table here:
+
+```toml
+[target]
+lemma = "intellig"                  # stem1 of the i-spelling intelligo entry
+pos = "V"
+decl_which = 3
+decl_var = 1
+
+[[change]]
+field = "stem3"
+borrow_from = { lemma = "intelleg", pos = "V", decl_which = 3, decl_var = 1, field = "stem3" }
+
+[[change]]
+field = "stem4"
+borrow_from = { lemma = "intelleg", pos = "V", decl_which = 3, decl_var = 1, field = "stem4" }
+```
+
+A single `[change]` table (as in OVR-001/002) remains valid — it is treated as a
+one-element list.
 
 ## ID scheme
 
