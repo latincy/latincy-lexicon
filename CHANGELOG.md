@@ -1,9 +1,25 @@
 # Changelog
 
-## [0.10.1] — 2026-07-11
+## [0.10.0] — 2026-07-11
 
-Citation-form corrections surfaced during a latincy-viewer run, both traced to
-homograph handling in the build.
+Surfaces the Lewis & Short sense store (84,091 senses / 42,982 entries) from
+the token API — tier 1 of the senses roadmap. Also fixes two citation-form
+bugs surfaced during a latincy-viewer run.
+
+### Added
+- **lewis_short**: new opt-in `attach_senses` config flag. When enabled, each
+  matched token gets `token._.lewis_short_senses` — the **top-ranked** entry's
+  structured senses as a lean list of `{"level", "n", "display_gloss"}` dicts.
+  Raw `gloss`, `citations`, and `sameAs` linked-data ids stay behind
+  `get_senses(entry_id)`. Default `False`: the sense store is ~48 MB and only
+  loads lazily when a component that needs it runs.
+- **lewis_short**: `attach_senses` round-trips through
+  `to_disk`/`from_disk`/`to_bytes`/`from_bytes` alongside `include_text`.
+- README: `lewis_short` component documentation (previously undocumented).
+- **overrides**: `[change]` may now be an array-of-tables (`[[change]]`) so one
+  override edits several fields of an entry as a single attributable record;
+  `[target]` accepts optional `decl_which`/`decl_var` to disambiguate
+  homographs sharing (stem1, pos).
 
 ### Fixed
 - **build**: the (headword, pos, glosses) dedup now breaks source-priority ties
@@ -20,35 +36,12 @@ homograph handling in the build.
   intellectum`. (LatinCy lemmatizes `intellig-` forms to the i-spelling, so the
   stub is what reached vocab cards.)
 
-### Added
-- **overrides**: `[change]` may now be an array-of-tables (`[[change]]`) so one
-  override edits several fields of an entry as a single attributable record;
-  `[target]` accepts optional `decl_which`/`decl_var` to disambiguate
-  homographs sharing (stem1, pos).
-
 ### Not a bug (documented)
 - `revertor`: the lexicon returns the correct citation for whichever lemma it
   is given (deponent lemma → `revertor, reverti, reversus sum`; active lemma →
   `reverto, revertere, reverti`, both u/v spellings). A viewer showing the
   active citation for a deponent form is a LatinCy model lemmatization issue,
   not a lexicon one.
-
-## [0.10.0] — 2026-07-11
-
-Surfaces the Lewis & Short sense store (84,091 senses / 42,982 entries) from
-the token API — tier 1 of the senses roadmap: attachment only, no sense
-selection (that is the future WSD bridge).
-
-### Added
-- **lewis_short**: new opt-in `attach_senses` config flag. When enabled, each
-  matched token gets `token._.lewis_short_senses` — the **top-ranked** entry's
-  structured senses as a lean list of `{"level", "n", "display_gloss"}` dicts.
-  Raw `gloss`, `citations`, and `sameAs` linked-data ids stay behind
-  `get_senses(entry_id)`. Default `False`: the sense store is ~48 MB and only
-  loads lazily when a component that needs it runs.
-- **lewis_short**: `attach_senses` round-trips through
-  `to_disk`/`from_disk`/`to_bytes`/`from_bytes` alongside `include_text`.
-- README: `lewis_short` component documentation (previously undocumented).
 
 ### Unchanged
 - `token._.gloss` still comes from Whitaker's top parse (upgrading it to a
