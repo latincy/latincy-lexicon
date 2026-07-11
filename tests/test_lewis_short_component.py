@@ -214,3 +214,68 @@ def test_senses_path_survives_byte_roundtrip(_paths, tmp_path_factory):
     pipe = fresh.add_pipe("lewis_short")
     pipe.from_bytes(data)
     assert pipe.get_senses("n9")[0]["level"] == "I"
+
+
+# --- tier-1 sense attachment (attach_senses) ----------------------------------
+
+
+@pytest.fixture(scope="module")
+def nlp_attach(_paths, tmp_path_factory):
+    idx, store = _paths
+    senses = tmp_path_factory.mktemp("ls_attach") / "lewis_short_senses.json"
+    senses.write_text(json.dumps(_SENSES), encoding="utf-8")
+    nlp = spacy.blank("la")
+    nlp.add_pipe(
+        "lewis_short",
+        config={"ls_index_path": idx, "ls_store_path": store,
+                "ls_senses_path": str(senses), "attach_senses": True},
+    )
+    return nlp
+
+
+def test_attach_senses_populates_lean_sense_list(nlp_attach):
+    tok = _run(nlp_attach, "agit", "ago", "VERB")
+    senses = tok._.lewis_short_senses
+    assert senses == [{"level": "I", "n": "I", "display_gloss": "to put in motion"}]
+    # Lean: raw gloss, citations, sameAs, id stay behind get_senses().
+    assert all(
+        set(s) <= {"level", "n", "display_gloss"} for s in senses
+    )
+
+
+def test_attach_senses_uses_top_ranked_entry_only(nlp_attach):
+    # "malus" has three homograph entries but none carry senses in the
+    # fixture store, so the attachment is an empty list — crucially from
+    # the top-ranked id, not a merge across homographs.
+    tok = _run(nlp_attach, "malus", "malus", "ADJ")
+    assert tok._.lewis_short_senses == []
+
+
+def test_attach_senses_default_off_leaves_extension_none(nlp_senses):
+    tok = _run(nlp_senses, "agit", "ago", "VERB")
+    assert tok._.lewis_short_senses is None
+
+
+def test_attach_senses_default_off_skips_sense_store_load(nlp_senses):
+    # Without attach_senses, running the component must not pay the (48 MB
+    # in production) sense-store load.
+    pipe = nlp_senses.get_pipe("lewis_short")
+    assert pipe._attach_senses is False
+
+
+def test_attach_senses_survives_byte_roundtrip(_paths, tmp_path_factory):
+    idx, store = _paths
+    senses = tmp_path_factory.mktemp("ls_attach_rt") / "lewis_short_senses.json"
+    senses.write_text(json.dumps(_SENSES), encoding="utf-8")
+    nlp = spacy.blank("la")
+    nlp.add_pipe(
+        "lewis_short",
+        config={"ls_index_path": idx, "ls_store_path": store,
+                "ls_senses_path": str(senses), "attach_senses": True},
+    )
+    data = nlp.get_pipe("lewis_short").to_bytes()
+
+    fresh = spacy.blank("la")
+    pipe = fresh.add_pipe("lewis_short")  # defaults attach_senses=False
+    pipe.from_bytes(data)
+    assert pipe._attach_senses is True

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.10.0] — 2026-07-11
+
+Surfaces the Lewis & Short sense store (84,091 senses / 42,982 entries) from
+the token API — tier 1 of the senses roadmap: attachment only, no sense
+selection (that is the future WSD bridge).
+
+### Added
+- **lewis_short**: new opt-in `attach_senses` config flag. When enabled, each
+  matched token gets `token._.lewis_short_senses` — the **top-ranked** entry's
+  structured senses as a lean list of `{"level", "n", "display_gloss"}` dicts.
+  Raw `gloss`, `citations`, and `sameAs` linked-data ids stay behind
+  `get_senses(entry_id)`. Default `False`: the sense store is ~48 MB and only
+  loads lazily when a component that needs it runs.
+- **lewis_short**: `attach_senses` round-trips through
+  `to_disk`/`from_disk`/`to_bytes`/`from_bytes` alongside `include_text`.
+- README: `lewis_short` component documentation (previously undocumented).
+
+### Unchanged
+- `token._.gloss` still comes from Whitaker's top parse (upgrading it to a
+  contextually *selected* L&S sense is tier 2).
+
 ## [0.9.1] — 2026-07-11
 
 GitHub tag only (not published to PyPI; the fix ships to PyPI with 0.10.0).

@@ -370,8 +370,9 @@ _UD_TO_WW_POS_LS: dict[str, str] = {
 
 @Language.factory(
     "lewis_short",
-    default_config={"ls_index_path": None, "ls_store_path": None, "include_text": False},
-    assigns=["token._.lewis_short"],
+    default_config={"ls_index_path": None, "ls_store_path": None, "include_text": False,
+                    "attach_senses": False},
+    assigns=["token._.lewis_short", "token._.lewis_short_senses"],
 )
 def create_lewis_short(
     nlp: Language,
@@ -380,11 +381,13 @@ def create_lewis_short(
     ls_store_path: Optional[str] = None,
     ls_senses_path: Optional[str] = None,
     include_text: bool = False,
+    attach_senses: bool = False,
 ) -> "LewisShort":
     """Create the Lewis & Short lookup component."""
     return LewisShort(
         nlp, name, ls_index_path=ls_index_path, ls_store_path=ls_store_path,
         ls_senses_path=ls_senses_path, include_text=include_text,
+        attach_senses=attach_senses,
     )
 
 
@@ -405,16 +408,26 @@ class LewisShort:
 
     Both files are loaded lazily on first ``__call__`` (the store is ~28 MB),
     so merely inspecting the pipeline pays no load cost.
+
+    Pass ``attach_senses=True`` to also populate
+    ``token._.lewis_short_senses`` with the top-ranked entry's structured
+    senses as a lean list of ``{"level", "n", "display_gloss"}`` dicts (raw
+    ``gloss``, ``citations`` and ``sameAs`` stay behind :meth:`get_senses`).
+    Off by default: the sense store is ~48 MB and loads lazily on the first
+    call that needs it.
     """
 
     # Short metadata fields kept on the lean per-token handle (text excluded).
     _HANDLE_FIELDS = ("key", "orth", "pos", "gen", "itype")
+    # Sense fields kept on the lean token._.lewis_short_senses dicts.
+    _SENSE_FIELDS = ("level", "n", "display_gloss")
 
     def __init__(self, nlp: Language, name: str, *,
                  ls_index_path: Optional[str] = None,
                  ls_store_path: Optional[str] = None,
                  ls_senses_path: Optional[str] = None,
-                 include_text: bool = False) -> None:
+                 include_text: bool = False,
+                 attach_senses: bool = False) -> None:
         self.name = name
         self._nlp = nlp
         self._index: dict[str, list[str]] = {}
@@ -433,11 +446,14 @@ class LewisShort:
         self._store_path = ls_store_path
         self._senses_path = ls_senses_path
         self._include_text = include_text
+        self._attach_senses = attach_senses
         self._loaded = not ls_index_path
         self._senses_loaded = not ls_senses_path
 
         if not Token.has_extension("lewis_short"):
             Token.set_extension("lewis_short", default=None)
+        if not Token.has_extension("lewis_short_senses"):
+            Token.set_extension("lewis_short_senses", default=None)
 
     def _ensure_loaded(self) -> None:
         if self._loaded:
@@ -486,6 +502,15 @@ class LewisShort:
             ww_pos = _UD_TO_WW_POS_LS.get(token.pos_, "")
             ranked = rank_ls_candidates(ww_pos, candidate_ids, self._store)
             token._.lewis_short = [self._handle(cid) for cid in ranked]
+
+            # Tier-1 sense attachment: the top-ranked entry's senses, lean.
+            # No selection logic — that's the WSD bridge (tier 2). get_senses
+            # lazy-loads the ~48 MB store, which is why this is opt-in.
+            if self._attach_senses:
+                token._.lewis_short_senses = [
+                    {f: s[f] for f in self._SENSE_FIELDS if f in s}
+                    for s in self.get_senses(ranked[0])
+                ]
 
         return doc
 
@@ -555,6 +580,8 @@ class LewisShort:
             cfg["ls_senses_path"] = self._senses_path
         if self._include_text:
             cfg["include_text"] = True
+        if self._attach_senses:
+            cfg["attach_senses"] = True
         return cfg
 
     def _apply_config(self, cfg: dict) -> None:
@@ -567,6 +594,7 @@ class LewisShort:
             self._senses_path = cfg["ls_senses_path"]
             self._senses_loaded = False
         self._include_text = bool(cfg.get("include_text", self._include_text))
+        self._attach_senses = bool(cfg.get("attach_senses", self._attach_senses))
 
 
 # =============================================================================

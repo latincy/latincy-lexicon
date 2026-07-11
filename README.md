@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Lexicon" width="400">
 
-[![PyPI version](https://img.shields.io/badge/pypi-v0.9.0-orange.svg)](https://pypi.org/project/latincy-lexicon/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.10.0-orange.svg)](https://pypi.org/project/latincy-lexicon/)
 [![Python versions](https://img.shields.io/pypi/pyversions/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -105,6 +105,25 @@ A single component that provides three token extensions:
 With no configuration the component loads the **bundled lexicon** (glosses + citation forms) — no data files required. Pass `analyzer_path` (from `latincy-lexicon build`) to add the morphological parse engine (`token._.ww`), or `lexicon_path` to override the bundled lexicon. Best results when placed after all LatinCy pipeline components.
 
 **Macron filter (optional):** pass `macron_path` pointing to a kaikki-derived macronized-form → UD morph index (built by `latincy-words`). When a macronized form is analyzed, the index constrains which parses are returned — e.g. `puellā` → ABL only. Falls back gracefully when a form is not in the index.
+
+### `lewis_short`
+
+A dictionary-article overlay: looks the token's lemma up in the bundled Lewis & Short index and attaches ranked entry handles.
+
+```python
+nlp.add_pipe("lewis_short")
+
+doc = nlp("agit")
+doc[0]._.lewis_short
+# [{"id": "n9", "key": "ago", "orth": "ăgo", "pos": "v. a.", ...}]
+```
+
+Token extensions:
+
+- `token._.lewis_short` — list of L&S entry handles for the token's lemma, homographs ranked best-first by POS compatibility. Handles are lean (`id`, `key`, `orth`, `pos`, `gen`, `itype`); pass `config={"include_text": True}` to inline the full article text, or fetch it on demand via `nlp.get_pipe("lewis_short").get_entry(id)`.
+- `token._.lewis_short_senses` — `None` by default. Pass `config={"attach_senses": True}` to populate it with the **top-ranked** entry's structured senses as a lean list of `{"level", "n", "display_gloss"}` dicts. Opt-in because the sense store is ~48 MB (loaded lazily on first use). Full sense detail — raw `gloss`, `citations`, `sameAs` linked-data ids — stays available via `nlp.get_pipe("lewis_short").get_senses(id)`.
+
+No sense *selection* is performed — all senses of the top-ranked entry are attached in dictionary order; picking the contextually right one is future WSD work.
 
 ### `paradigm_generator`
 
