@@ -61,3 +61,4 @@ src/latincy_lexicon/align/report.py
 tests/test_db/
 tests/test_export/
 tests/test_align/test_headword.py
+scratch/
