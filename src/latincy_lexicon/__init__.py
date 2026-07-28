@@ -5,6 +5,7 @@ __version__ = "0.11.0"
 from latincy_lexicon.build import (  # noqa: F401
     build_analyzer,
     build_lexicon,
+    build_lexicon_and_analyzer,
     sense_index_path,
     senses_path,
 )

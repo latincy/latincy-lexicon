@@ -118,8 +118,14 @@ class WhitakersWords:
         # what recovers a gloss when the upstream lemmatizer misses — the lexicon
         # is lemma-keyed, so a bad lemma alone yields nothing, but the analyzer
         # segments the surface form and the __call__ augmentation looks the entry
-        # up by headword. An explicit analyzer_path opts out (it wins instead).
-        self._use_bundled_analyzer = use_bundled_analyzer and not analyzer_path
+        # up by headword. Same opt-out set as the bundled lexicon above — any
+        # explicit path signals the caller is taking control of data sources.
+        self._use_bundled_analyzer = (
+            use_bundled_analyzer
+            and not analyzer_path
+            and not lexicon_path
+            and not ls_index_path
+        )
         # `_loaded` is True once any configured paths have been read into
         # memory. Lazy so that pipelines that merely inspect `nlp.pipe_names`
         # or round-trip via to_disk/from_disk don't pay the ~500ms load cost.
@@ -139,18 +145,28 @@ class WhitakersWords:
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
-        if self._use_bundled_lexicon and not self._lexicon:
-            from latincy_lexicon.build import build_lexicon
+        if self._use_bundled_lexicon and self._use_bundled_analyzer and not self._lexicon and self._analyzer is None:
+            # Both bundled sources cold: share the one ~5s WW-data parse
+            # instead of each building it independently (build_lexicon() +
+            # build_analyzer() would each call it on their own).
+            from latincy_lexicon.build import build_lexicon_and_analyzer
 
-            self._lexicon = build_lexicon()
+            self._lexicon, self._analyzer = build_lexicon_and_analyzer(
+                macron_path=self._macron_path
+            )
+        else:
+            if self._use_bundled_lexicon and not self._lexicon:
+                from latincy_lexicon.build import build_lexicon
+
+                self._lexicon = build_lexicon()
+            if self._use_bundled_analyzer and self._analyzer is None:
+                from latincy_lexicon.build import build_analyzer
+
+                self._analyzer = build_analyzer(macron_path=self._macron_path)
         if self._lexicon_path and not self._lexicon:
             self._load_lexicon(self._lexicon_path)
         if self._analyzer_path and self._analyzer is None:
             self._load_analyzer(self._analyzer_path)
-        if self._use_bundled_analyzer and self._analyzer is None:
-            from latincy_lexicon.build import build_analyzer
-
-            self._analyzer = build_analyzer()
         if self._ls_index_path and not self._ls_index:
             with open(self._ls_index_path) as f:
                 self._ls_index = json.load(f)
@@ -327,8 +343,9 @@ class WhitakersWords:
                 json.dump(self._lexicon, f, ensure_ascii=False)
         if self._analyzer_path:
             cfg["analyzer_path"] = self._analyzer_path
-        if self._use_bundled_analyzer:
-            cfg["use_bundled_analyzer"] = True
+        # Written unconditionally (True or False) — a bare truthy check can't
+        # distinguish an explicit opt-out from "key never set" on reload.
+        cfg["use_bundled_analyzer"] = self._use_bundled_analyzer
         if self._macron_path:
             cfg["macron_path"] = self._macron_path
         if cfg:
@@ -349,8 +366,8 @@ class WhitakersWords:
             if cfg.get("analyzer_path"):
                 self._analyzer_path = cfg["analyzer_path"]
                 self._loaded = False
-            if cfg.get("use_bundled_analyzer"):
-                self._use_bundled_analyzer = True
+            if "use_bundled_analyzer" in cfg:
+                self._use_bundled_analyzer = cfg["use_bundled_analyzer"]
                 self._loaded = False
             if cfg.get("macron_path"):
                 self._macron_path = cfg["macron_path"]
@@ -364,8 +381,8 @@ class WhitakersWords:
             data["lexicon"] = self._lexicon
         if self._analyzer_path:
             data["analyzer_path"] = self._analyzer_path
-        if self._use_bundled_analyzer:
-            data["use_bundled_analyzer"] = True
+        # Written unconditionally (True or False) — see to_disk for why.
+        data["use_bundled_analyzer"] = self._use_bundled_analyzer
         if self._macron_path:
             data["macron_path"] = self._macron_path
         return json.dumps(data, ensure_ascii=False).encode("utf-8") if data else b""
@@ -380,8 +397,8 @@ class WhitakersWords:
             if d.get("analyzer_path"):
                 self._analyzer_path = d["analyzer_path"]
                 self._loaded = False
-            if d.get("use_bundled_analyzer"):
-                self._use_bundled_analyzer = True
+            if "use_bundled_analyzer" in d:
+                self._use_bundled_analyzer = d["use_bundled_analyzer"]
                 self._loaded = False
             if d.get("macron_path"):
                 self._macron_path = d["macron_path"]

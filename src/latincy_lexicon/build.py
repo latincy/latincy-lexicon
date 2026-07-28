@@ -1328,6 +1328,33 @@ def _lexicon_cache_key(base: Path) -> str:
     return f"{__version__}-{digest}"
 
 
+def _read_json_cache(cache_file: Path) -> Optional[dict]:
+    """Best-effort cache read; ``None`` on any miss or corruption."""
+    try:
+        with open(cache_file) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _write_json_cache(cache_file: Path, payload: dict) -> None:
+    """Best-effort cache write; a read-only cache dir must not break builds."""
+    try:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_file, "w") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def _lexicon_cache_file(base: Path) -> Path:
+    return _cache_dir() / f"lexicon-{_lexicon_cache_key(base)}.json"
+
+
+def _analyzer_cache_file(base: Path) -> Path:
+    return _cache_dir() / f"analyzer-{_lexicon_cache_key(base)}.json"
+
+
 def build_lexicon(
     vendor: str | Path | None = None, *, use_cache: bool = True
 ) -> dict[str, list[dict]]:
@@ -1345,16 +1372,18 @@ def build_lexicon(
     keyed by :func:`_lexicon_cache_key`. Pass ``use_cache=False`` to force a
     rebuild and skip the cache entirely. Cache read/write failures degrade to a
     plain in-memory build rather than raising.
+
+    If both a lexicon and an analyzer are needed, prefer
+    :func:`build_lexicon_and_analyzer` — it shares the ~5s :func:`_prepare` parse
+    across both instead of paying it twice.
     """
     base = data_dir() if vendor is None else Path(vendor)
-    cache_file = _cache_dir() / f"lexicon-{_lexicon_cache_key(base)}.json"
+    cache_file = _lexicon_cache_file(base)
 
     if use_cache:
-        try:
-            with open(cache_file) as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            pass  # missing or corrupt cache → rebuild below
+        cached = _read_json_cache(cache_file)
+        if cached is not None:
+            return cached
 
     p = _prepare(vendor)
     lexicon = _build_lexicon_dict(
@@ -1362,18 +1391,30 @@ def build_lexicon(
     )
 
     if use_cache:
-        try:
-            cache_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(cache_file, "w") as f:
-                json.dump(lexicon, f, ensure_ascii=False)
-        except OSError:
-            pass  # best-effort cache; a read-only cache dir must not break builds
+        _write_json_cache(cache_file, lexicon)
 
     return lexicon
 
 
+def _analyzer_from_payload(
+    payload: dict, macron_path: str | Path | None = None
+) -> "Analyzer":
+    from latincy_lexicon.analyzer import Analyzer
+
+    return Analyzer(
+        inflections=payload["inflections"],
+        uniques=payload["uniques"],
+        tackons=payload["tackons"],
+        entries=payload["entries"],
+        headwords={int(k): v for k, v in payload["headwords"].items()},
+        plural_mappings=payload["plural_mappings"],
+        macron_path=macron_path,
+    )
+
+
 def build_analyzer(
-    vendor: str | Path | None = None, *, use_cache: bool = True
+    vendor: str | Path | None = None, *, use_cache: bool = True,
+    macron_path: str | Path | None = None,
 ) -> "Analyzer":
     """Build the morphological analyzer in memory, with a disk cache.
 
@@ -1387,28 +1428,24 @@ def build_analyzer(
     form → headword engine that lets the component look an entry up from the
     surface form when the lemma is wrong.
 
+    ``macron_path`` is forwarded to the constructed :class:`Analyzer` exactly as
+    :meth:`Analyzer.from_json` forwards it — pass it here so a macronized-form
+    filter still applies when using the bundled (rather than an explicit
+    ``analyzer_path``) analyzer.
+
     The full parse is ~5s, so the payload is cached under :func:`_cache_dir`
     (``analyzer-`` prefix) keyed by :func:`_lexicon_cache_key`. On a warm cache
     the payload loads without touching :func:`_prepare`. Pass ``use_cache=False``
     to force a rebuild. Cache read/write failures degrade to a plain in-memory
     build rather than raising.
 
-    Note: on a *cold* cache, a pipeline that also calls :func:`build_lexicon`
-    pays :func:`_prepare` twice (~10s total). A future optimization could share
-    a single ``_prepare`` across both builders.
+    If a lexicon is also needed, prefer :func:`build_lexicon_and_analyzer` — it
+    shares the ~5s :func:`_prepare` parse across both instead of paying it twice.
     """
-    from latincy_lexicon.analyzer import Analyzer
-
     base = data_dir() if vendor is None else Path(vendor)
-    cache_file = _cache_dir() / f"analyzer-{_lexicon_cache_key(base)}.json"
+    cache_file = _analyzer_cache_file(base)
 
-    payload: dict | None = None
-    if use_cache:
-        try:
-            with open(cache_file) as f:
-                payload = json.load(f)
-        except (OSError, ValueError):
-            pass  # missing or corrupt cache → rebuild below
+    payload = _read_json_cache(cache_file) if use_cache else None
 
     if payload is None:
         p = _prepare(vendor)
@@ -1417,21 +1454,51 @@ def build_analyzer(
             p["headwords"], p["plural_mappings"],
         )
         if use_cache:
-            try:
-                cache_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(cache_file, "w") as f:
-                    json.dump(payload, f, ensure_ascii=False)
-            except OSError:
-                pass  # best-effort cache; a read-only cache dir must not break builds
+            _write_json_cache(cache_file, payload)
 
-    return Analyzer(
-        inflections=payload["inflections"],
-        uniques=payload["uniques"],
-        tackons=payload["tackons"],
-        entries=payload["entries"],
-        headwords={int(k): v for k, v in payload["headwords"].items()},
-        plural_mappings=payload["plural_mappings"],
-    )
+    return _analyzer_from_payload(payload, macron_path=macron_path)
+
+
+def build_lexicon_and_analyzer(
+    vendor: str | Path | None = None, *, use_cache: bool = True,
+    macron_path: str | Path | None = None,
+) -> tuple[dict[str, list[dict]], "Analyzer"]:
+    """Build both the bundled lexicon and analyzer, sharing one cold-cache parse.
+
+    Equivalent to calling :func:`build_lexicon` and :func:`build_analyzer`
+    separately, except that when *neither* has a warm cache, the ~5s
+    :func:`_prepare` parse of the bundled WW data runs once instead of twice —
+    this is the path ``whitakers_words`` uses when both ``use_bundled_lexicon``
+    and ``use_bundled_analyzer`` are on (the zero-config default). Each result
+    is still cached to its own file exactly as the standalone builders do, so a
+    warm cache for either resource is used as-is, and a later standalone
+    :func:`build_lexicon`/:func:`build_analyzer` call also hits the shared cache.
+    """
+    base = data_dir() if vendor is None else Path(vendor)
+    lexicon_cache_file = _lexicon_cache_file(base)
+    analyzer_cache_file = _analyzer_cache_file(base)
+
+    lexicon = _read_json_cache(lexicon_cache_file) if use_cache else None
+    analyzer_payload = _read_json_cache(analyzer_cache_file) if use_cache else None
+
+    if lexicon is None or analyzer_payload is None:
+        p = _prepare(vendor)
+        if lexicon is None:
+            lexicon = _build_lexicon_dict(
+                p["entries"], p["addons"], p["headwords"], p["plural_mappings"]
+            )
+            if use_cache:
+                _write_json_cache(lexicon_cache_file, lexicon)
+        if analyzer_payload is None:
+            analyzer_payload = _analyzer_payload(
+                p["entries"], p["inflections"], p["uniques"], p["addons"],
+                p["headwords"], p["plural_mappings"],
+            )
+            if use_cache:
+                _write_json_cache(analyzer_cache_file, analyzer_payload)
+
+    analyzer = _analyzer_from_payload(analyzer_payload, macron_path=macron_path)
+    return lexicon, analyzer
 
 
 def build(

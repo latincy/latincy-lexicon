@@ -19,7 +19,13 @@ which the default pipeline never did.
   root): builds a ready-to-use `Analyzer` in memory from the bundled WW data,
   mirroring `build_lexicon()`. Disk-cached under `~/.cache/latincy-lexicon`
   (`analyzer-` prefix) keyed by package version + DICTLINE hash; ~5 s first
-  call, then loaded from cache.
+  call, then loaded from cache. Accepts `macron_path` and forwards it to the
+  constructed `Analyzer`, same as `Analyzer.from_json`.
+- **`build_lexicon_and_analyzer()`** (`latincy_lexicon.build`, re-exported):
+  builds both bundled data sources sharing a single `_prepare()` parse when
+  neither has a warm cache — `whitakers_words` uses this instead of calling
+  `build_lexicon()` + `build_analyzer()` independently, halving the cold-start
+  cost (~5-6 s instead of ~10 s) for the zero-config default pipeline.
 - **whitakers_words**: new `use_bundled_analyzer` config flag, **default
   `True`**. The default component now populates `token._.ww` and recovers
   `token._.gloss` on forms the lemmatizer misses, with no data files on disk.
@@ -27,11 +33,28 @@ which the default pipeline never did.
   restores the lighter lexicon-only mode. The flag round-trips through
   `to_disk`/`from_disk`/`to_bytes`/`from_bytes`.
 
+### Fixed
+- **whitakers_words**: `use_bundled_analyzer=False` now correctly survives a
+  `to_bytes`/`from_bytes` (or `to_disk`/`from_disk`) round trip onto a
+  freshly-constructed pipe. Previously the flag was only ever written when
+  truthy, so an explicit `False` was indistinguishable from "unset" and
+  silently reverted to the default `True` on load.
+- **whitakers_words**: `use_bundled_analyzer` is now suppressed by an explicit
+  `lexicon_path` or `ls_index_path`, matching `use_bundled_lexicon`'s existing
+  opt-out set — not just an explicit `analyzer_path`. Previously a caller
+  pinning a custom lexicon still got the bundled WW analyzer built and
+  consulted, an unrequested ~5 s cost and bundled-data leak into `token._.ww`.
+- **whitakers_words**: `macron_path` now reaches the analyzer even when it's
+  built via the bundled default path. Previously it only worked together with
+  an explicit `analyzer_path` — under the new default config it was silently
+  ignored with no error.
+
 ### Changed
 - **whitakers_words**: default behavior now builds the analyzer on first use
-  (~5 s, cached) and carries its stem/ending indexes in memory. `token.lemma_`
-  is never overwritten — the corrected citation form surfaces via
-  `token._.lexicon[0]["headword"]` and `token._.ww[0]["lemma"]`.
+  (~5-6 s via the shared-parse path above, cached) and carries its stem/ending
+  indexes in memory. `token.lemma_` is never overwritten — the corrected
+  citation form surfaces via `token._.lexicon[0]["headword"]` and
+  `token._.ww[0]["lemma"]`.
 - Refactor: extracted `_analyzer_payload()` in `build.py`, shared by the
   `analyzer.json` export and the in-memory `build_analyzer()` so both stay
   identical.
