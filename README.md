@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Lexicon" width="400">
 
-[![PyPI version](https://img.shields.io/badge/pypi-v0.10.0-orange.svg)](https://pypi.org/project/latincy-lexicon/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.11.0-orange.svg)](https://pypi.org/project/latincy-lexicon/)
 [![Python versions](https://img.shields.io/pypi/pyversions/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -84,7 +84,7 @@ This parses the bundled DICTLINE, INFLECTS, UNIQUES, and ADDONS files, applies p
 import spacy
 
 nlp = spacy.load("la_core_web_lg")
-nlp.add_pipe("whitakers_words")   # bundled lexicon; add analyzer_path for token._.ww
+nlp.add_pipe("whitakers_words")   # bundled lexicon + analyzer, no data files needed
 
 doc = nlp("Gallia est omnis divisa in partes tres.")
 
@@ -102,7 +102,14 @@ A single component that provides three token extensions:
 - `token._.ww` — full morphological parse list from the Words stem+ending engine, ranked by POS match, morphological features, dependency labels, NER context, and frequency
 - `token._.gloss` — short definition from the top-ranked parse, with Whitaker's inline usage notes and citations removed
 
-With no configuration the component loads the **bundled lexicon** (glosses + citation forms) — no data files required. Pass `analyzer_path` (from `latincy-lexicon build`) to add the morphological parse engine (`token._.ww`), or `lexicon_path` to override the bundled lexicon. Best results when placed after all LatinCy pipeline components.
+With no configuration the component loads **both** bundled data sources — no data files required:
+
+- the **bundled lexicon** (`build_lexicon()`) for glosses + citation forms, keyed by the token's lemma, and
+- the **bundled analyzer** (`build_analyzer()`, `use_bundled_analyzer=True` by default) — the WW stem+ending engine, built in memory from the same bundled data. Both are built on first use (~5 s each) and cached to `~/.cache/latincy-lexicon`; nothing large ships in the wheel.
+
+The analyzer matters even when you only want glosses: the lexicon is lemma-keyed, so when an upstream lemmatizer misses a form (e.g. `contemplemur` left as its own lemma), a lemma-only lookup finds nothing and the token would be dropped. The analyzer segments the surface form, the component looks the entry up by headword, and `token._.gloss` is recovered. `token.lemma_` is never overwritten — the lemmatizer owns it; the corrected citation form surfaces via `token._.lexicon[0]["headword"]` and `token._.ww[0]["lemma"]`.
+
+Pass `use_bundled_analyzer=False` to restore the lighter lexicon-only mode (skips the analyzer build and its resident indexes, at the cost of dropping glosses on lemmatizer misses). Pass an explicit `analyzer_path` (from `latincy-lexicon build`) to use a prebuilt `analyzer.json` instead of the in-memory build, or `lexicon_path` to override the bundled lexicon. Best results when placed after all LatinCy pipeline components.
 
 **Macron filter (optional):** pass `macron_path` pointing to a kaikki-derived macronized-form → UD morph index (built by `latincy-words`). When a macronized form is analyzed, the index constrains which parses are returned — e.g. `puellā` → ABL only. Falls back gracefully when a form is not in the index.
 

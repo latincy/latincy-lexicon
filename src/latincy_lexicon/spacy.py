@@ -38,7 +38,7 @@ from latincy_lexicon.glosses import (
     "whitakers_words",
     default_config={"lexicon_path": None, "analyzer_path": None, "macron_path": None,
                     "ls_index_path": None, "ls_senses_path": None,
-                    "use_bundled_lexicon": True},
+                    "use_bundled_lexicon": True, "use_bundled_analyzer": True},
     assigns=["token._.lexicon", "token._.ww", "token._.gloss"],
 )
 def create_whitakers_words(
@@ -50,6 +50,7 @@ def create_whitakers_words(
     ls_index_path: Optional[str] = None,
     ls_senses_path: Optional[str] = None,
     use_bundled_lexicon: bool = True,
+    use_bundled_analyzer: bool = True,
 ) -> "WhitakersWords":
     """Create the Whitaker's Words pipeline component."""
     return WhitakersWords(
@@ -57,6 +58,7 @@ def create_whitakers_words(
         macron_path=macron_path,
         ls_index_path=ls_index_path, ls_senses_path=ls_senses_path,
         use_bundled_lexicon=use_bundled_lexicon,
+        use_bundled_analyzer=use_bundled_analyzer,
     )
 
 
@@ -85,7 +87,8 @@ class WhitakersWords:
                  macron_path: Optional[str] = None,
                  ls_index_path: Optional[str] = None,
                  ls_senses_path: Optional[str] = None,
-                 use_bundled_lexicon: bool = True) -> None:
+                 use_bundled_lexicon: bool = True,
+                 use_bundled_analyzer: bool = True) -> None:
         self.name = name
         self._nlp = nlp
         self._lexicon: dict = {}
@@ -110,11 +113,19 @@ class WhitakersWords:
             and not analyzer_path
             and not ls_index_path
         )
+        # Bundled analyzer (default on): build the WW morphological analyzer in
+        # memory from the bundled data (cached to disk, ~5s first call). This is
+        # what recovers a gloss when the upstream lemmatizer misses — the lexicon
+        # is lemma-keyed, so a bad lemma alone yields nothing, but the analyzer
+        # segments the surface form and the __call__ augmentation looks the entry
+        # up by headword. An explicit analyzer_path opts out (it wins instead).
+        self._use_bundled_analyzer = use_bundled_analyzer and not analyzer_path
         # `_loaded` is True once any configured paths have been read into
         # memory. Lazy so that pipelines that merely inspect `nlp.pipe_names`
         # or round-trip via to_disk/from_disk don't pay the ~500ms load cost.
         self._loaded = not (
-            lexicon_path or analyzer_path or ls_index_path or self._use_bundled_lexicon
+            lexicon_path or analyzer_path or ls_index_path
+            or self._use_bundled_lexicon or self._use_bundled_analyzer
         )
         self._warned = False
 
@@ -136,6 +147,10 @@ class WhitakersWords:
             self._load_lexicon(self._lexicon_path)
         if self._analyzer_path and self._analyzer is None:
             self._load_analyzer(self._analyzer_path)
+        if self._use_bundled_analyzer and self._analyzer is None:
+            from latincy_lexicon.build import build_analyzer
+
+            self._analyzer = build_analyzer()
         if self._ls_index_path and not self._ls_index:
             with open(self._ls_index_path) as f:
                 self._ls_index = json.load(f)
@@ -223,6 +238,14 @@ class WhitakersWords:
             # and carmen 'card for wool' freq=F, both NOUN) both survive,
             # while the same entry reached via lemma + inflection paths
             # collapses to one row.
+            #
+            # This is also the path that rescues a gloss when the upstream
+            # lemmatizer misses (e.g. `contemplemur` left as its own lemma):
+            # the analyzer segments the surface form, we look the entry up by
+            # headword, and the gloss below is set from the parse. We do NOT
+            # write back a corrected `token.lemma_` — the lemmatizer owns that
+            # field; the corrected citation form is exposed via
+            # `token._.lexicon[0]["headword"]` and `token._.ww[0]["lemma"]`.
             if self._lexicon:
                 entries: list[dict] = []
                 seen: set[tuple] = set()
@@ -304,6 +327,8 @@ class WhitakersWords:
                 json.dump(self._lexicon, f, ensure_ascii=False)
         if self._analyzer_path:
             cfg["analyzer_path"] = self._analyzer_path
+        if self._use_bundled_analyzer:
+            cfg["use_bundled_analyzer"] = True
         if self._macron_path:
             cfg["macron_path"] = self._macron_path
         if cfg:
@@ -324,6 +349,9 @@ class WhitakersWords:
             if cfg.get("analyzer_path"):
                 self._analyzer_path = cfg["analyzer_path"]
                 self._loaded = False
+            if cfg.get("use_bundled_analyzer"):
+                self._use_bundled_analyzer = True
+                self._loaded = False
             if cfg.get("macron_path"):
                 self._macron_path = cfg["macron_path"]
         return self
@@ -336,6 +364,8 @@ class WhitakersWords:
             data["lexicon"] = self._lexicon
         if self._analyzer_path:
             data["analyzer_path"] = self._analyzer_path
+        if self._use_bundled_analyzer:
+            data["use_bundled_analyzer"] = True
         if self._macron_path:
             data["macron_path"] = self._macron_path
         return json.dumps(data, ensure_ascii=False).encode("utf-8") if data else b""
@@ -349,6 +379,9 @@ class WhitakersWords:
                 self._lexicon_path = None
             if d.get("analyzer_path"):
                 self._analyzer_path = d["analyzer_path"]
+                self._loaded = False
+            if d.get("use_bundled_analyzer"):
+                self._use_bundled_analyzer = True
                 self._loaded = False
             if d.get("macron_path"):
                 self._macron_path = d["macron_path"]

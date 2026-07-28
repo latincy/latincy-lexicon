@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.11.0] — 2026-07-28
+
+Fixes silently-dropped glosses on lemmatizer misses in `whitakers_words`, by
+shipping the morphological analyzer **on by default** — built in memory from the
+already-bundled WW data, with no 15 MB `analyzer.json` added to the wheel.
+
+Previously the default (lexicon-only) component keyed its lookup solely on
+`token.lemma_`. When an upstream spaCy model mis-lemmatized a form — even one
+Whitaker's own analyzer parses correctly, e.g. `contemplemur` (pres. pass. subj.
+of deponent `contemplor`) — the lemma lookup missed and the token was left with
+no gloss. The analyzer, which segments the surface form and lets the component
+recover the entry by headword, only ran when an `analyzer_path` was configured,
+which the default pipeline never did.
+
+### Added
+- **`build_analyzer()`** (`latincy_lexicon.build`, re-exported from the package
+  root): builds a ready-to-use `Analyzer` in memory from the bundled WW data,
+  mirroring `build_lexicon()`. Disk-cached under `~/.cache/latincy-lexicon`
+  (`analyzer-` prefix) keyed by package version + DICTLINE hash; ~5 s first
+  call, then loaded from cache.
+- **whitakers_words**: new `use_bundled_analyzer` config flag, **default
+  `True`**. The default component now populates `token._.ww` and recovers
+  `token._.gloss` on forms the lemmatizer misses, with no data files on disk.
+  An explicit `analyzer_path` still takes precedence; `use_bundled_analyzer=False`
+  restores the lighter lexicon-only mode. The flag round-trips through
+  `to_disk`/`from_disk`/`to_bytes`/`from_bytes`.
+
+### Changed
+- **whitakers_words**: default behavior now builds the analyzer on first use
+  (~5 s, cached) and carries its stem/ending indexes in memory. `token.lemma_`
+  is never overwritten — the corrected citation form surfaces via
+  `token._.lexicon[0]["headword"]` and `token._.ww[0]["lemma"]`.
+- Refactor: extracted `_analyzer_payload()` in `build.py`, shared by the
+  `analyzer.json` export and the in-memory `build_analyzer()` so both stay
+  identical.
+
 ## [0.10.0] — 2026-07-11
 
 Surfaces the Lewis & Short sense store (84,091 senses / 42,982 entries) from

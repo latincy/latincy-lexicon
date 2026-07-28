@@ -11,7 +11,7 @@ import json
 import os
 from importlib import resources
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from latincy_lexicon.align.normalize import normalize_latin
 from latincy_lexicon.glosses import (
@@ -20,6 +20,9 @@ from latincy_lexicon.glosses import (
     strip_usage_note,
 )
 from latincy_lexicon.models import DictEntry, Inflection
+
+if TYPE_CHECKING:
+    from latincy_lexicon.analyzer import Analyzer
 
 
 # Source-code priority for dedup tiebreaking. Higher = more authoritative.
@@ -968,18 +971,25 @@ def _build_plural_mappings(
 # Export: in-memory dicts → JSON files
 # ---------------------------------------------------------------------------
 
-def _export_analyzer(
+def _analyzer_payload(
     entries: list[dict],
     inflections: list[dict],
     uniques: list[dict],
     addons: list[dict],
     headwords: dict[int, tuple[str, str]],
     plural_mappings: dict[str, str],
-    output_path: Path,
-) -> int:
-    """Write analyzer.json from in-memory data."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+) -> dict:
+    """Build the analyzer's in-memory payload from parsed WW data.
 
+    Returns the exact dict :func:`_export_analyzer` serializes to
+    ``analyzer.json`` — the six keys ``Analyzer.from_json`` reads
+    (``inflections``, ``uniques``, ``tackons``, ``entries``, ``headwords``,
+    ``plural_mappings``). Field subsetting and the ``ending``/``form``
+    lowercasing happen here so :class:`~latincy_lexicon.analyzer.Analyzer` can
+    index directly. Shared by :func:`_export_analyzer` (JSON dump) and
+    :func:`build_analyzer` (direct in-memory construction) so both paths stay
+    byte-for-byte identical.
+    """
     # Strip fields the analyzer doesn't need from inflections.
     # Lowercase `ending` here so Analyzer._build_caches can index directly
     # without per-row .lower() calls at load time.
@@ -1031,7 +1041,7 @@ def _export_analyzer(
     # Headwords: entry_id → normalized
     hw_out = {str(eid): norm for eid, (_, norm) in headwords.items()}
 
-    data = {
+    return {
         "inflections": inf_out,
         "uniques": uni_out,
         "tackons": tackons,
@@ -1040,9 +1050,23 @@ def _export_analyzer(
         "plural_mappings": plural_mappings,
     }
 
+
+def _export_analyzer(
+    entries: list[dict],
+    inflections: list[dict],
+    uniques: list[dict],
+    addons: list[dict],
+    headwords: dict[int, tuple[str, str]],
+    plural_mappings: dict[str, str],
+    output_path: Path,
+) -> int:
+    """Write analyzer.json from in-memory data."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    data = _analyzer_payload(
+        entries, inflections, uniques, addons, headwords, plural_mappings
+    )
     with open(output_path, "w") as f:
         json.dump(data, f, ensure_ascii=False)
-
     return len(entries)
 
 
@@ -1346,6 +1370,68 @@ def build_lexicon(
             pass  # best-effort cache; a read-only cache dir must not break builds
 
     return lexicon
+
+
+def build_analyzer(
+    vendor: str | Path | None = None, *, use_cache: bool = True
+) -> "Analyzer":
+    """Build the morphological analyzer in memory, with a disk cache.
+
+    Returns a ready-to-use :class:`~latincy_lexicon.analyzer.Analyzer` built from
+    the same payload :func:`build` writes to ``analyzer.json`` — no 15 MB
+    prebuilt JSON on disk required. Uses the bundled WW data files by default
+    (the ``zzz`` defective-verb fix is applied upstream in :func:`_prepare`).
+    This is the path the ``whitakers_words`` component uses, under
+    ``use_bundled_analyzer=True``, to recover glosses on forms the upstream
+    lemmatizer misses: the lexicon is lemma-keyed, and the analyzer is the
+    form → headword engine that lets the component look an entry up from the
+    surface form when the lemma is wrong.
+
+    The full parse is ~5s, so the payload is cached under :func:`_cache_dir`
+    (``analyzer-`` prefix) keyed by :func:`_lexicon_cache_key`. On a warm cache
+    the payload loads without touching :func:`_prepare`. Pass ``use_cache=False``
+    to force a rebuild. Cache read/write failures degrade to a plain in-memory
+    build rather than raising.
+
+    Note: on a *cold* cache, a pipeline that also calls :func:`build_lexicon`
+    pays :func:`_prepare` twice (~10s total). A future optimization could share
+    a single ``_prepare`` across both builders.
+    """
+    from latincy_lexicon.analyzer import Analyzer
+
+    base = data_dir() if vendor is None else Path(vendor)
+    cache_file = _cache_dir() / f"analyzer-{_lexicon_cache_key(base)}.json"
+
+    payload: dict | None = None
+    if use_cache:
+        try:
+            with open(cache_file) as f:
+                payload = json.load(f)
+        except (OSError, ValueError):
+            pass  # missing or corrupt cache → rebuild below
+
+    if payload is None:
+        p = _prepare(vendor)
+        payload = _analyzer_payload(
+            p["entries"], p["inflections"], p["uniques"], p["addons"],
+            p["headwords"], p["plural_mappings"],
+        )
+        if use_cache:
+            try:
+                cache_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(cache_file, "w") as f:
+                    json.dump(payload, f, ensure_ascii=False)
+            except OSError:
+                pass  # best-effort cache; a read-only cache dir must not break builds
+
+    return Analyzer(
+        inflections=payload["inflections"],
+        uniques=payload["uniques"],
+        tackons=payload["tackons"],
+        entries=payload["entries"],
+        headwords={int(k): v for k, v in payload["headwords"].items()},
+        plural_mappings=payload["plural_mappings"],
+    )
 
 
 def build(

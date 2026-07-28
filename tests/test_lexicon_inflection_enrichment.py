@@ -149,9 +149,12 @@ def test_gloss_falls_back_to_lewis_short(tmp_path):
     )
 
     nlp = spacy.blank("la")
+    # Opt out of the bundled analyzer so the L&S fallback is exercised in
+    # isolation — otherwise the analyzer would gloss `ago` from Whitaker first.
     nlp.add_pipe(
         "whitakers_words",
-        config={"ls_index_path": str(idx), "ls_senses_path": str(senses)},
+        config={"ls_index_path": str(idx), "ls_senses_path": str(senses),
+                "use_bundled_analyzer": False},
     )
     doc = nlp(Doc(nlp.vocab, words=["ago"], lemmas=["ago"], pos=["VERB"]))
     assert doc[0]._.gloss == "to put in motion"
