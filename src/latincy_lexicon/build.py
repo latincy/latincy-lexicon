@@ -599,6 +599,22 @@ def _patch_packon_pronouns(
 # Headword reconstruction (in-memory, replaces align/headword.py SQL)
 # ---------------------------------------------------------------------------
 
+# WW-capitalized common nouns: entries whose DICTLINE stem carries a capital for
+# a folded-in proper/deity sense, even though the word is fundamentally a common
+# noun that a dictionary lemmatizes lowercase. Reconstruction would otherwise
+# render the display headword capitalized (e.g. stem "De" → "Deus"), the lone
+# false-capital once headwords stopped being force-lowercased — genuine proper
+# nouns (Juno, Roma, Latinus) and correctly case-split homographs (augustus vs
+# Augustus) are unaffected. Keyed by (stem1, pos); the stems themselves are left
+# capitalized so the form generator can still recover the proper-sense variant
+# ("Deus"), keeping the lowercase paradigm standard (see generator.py, REG-002).
+# Mirrors the curated-allowlist pattern already used for WW quirks
+# (generator._LOCATIVE_COMMON_NOUNS).
+_LOWERCASE_DISPLAY_HEADWORDS: frozenset[tuple[str, str]] = frozenset({
+    ("De", "N"),   # deus, dei — the general "god"; cf. OVR-004
+})
+
+
 def _build_headwords(
     entries: list[dict],
     inflections: list[dict],
@@ -623,6 +639,8 @@ def _build_headwords(
             stem3=entry.get("stem3"),
             meaning=entry.get("meaning"),
         )
+        if hw and (stem1, entry["pos"]) in _LOWERCASE_DISPLAY_HEADWORDS:
+            hw = hw[:1].lower() + hw[1:]
         normalized = normalize_latin(hw)
         headwords[entry["id"]] = (hw, normalized)
 
@@ -1138,11 +1156,24 @@ def _build_lexicon_dict(
         hw, normalized = headwords[entry_id]
         stems = [entry["stem1"], entry["stem2"], entry["stem3"], entry["stem4"]]
         principal_parts = [s for s in stems if s and s != "zzz"]
+        # Keep the display citation case-consistent with the (lowercased) headword
+        # for WW-capitalized common nouns like deus: render "deus, dei", not
+        # "deus, Dei". Only the exported display list is lowercased — the entry's
+        # underlying stems stay capitalized so the form generator can still
+        # recover the proper-sense variant (see _LOWERCASE_DISPLAY_HEADWORDS).
+        if (entry["stem1"], entry["pos"]) in _LOWERCASE_DISPLAY_HEADWORDS:
+            principal_parts = [p[:1].lower() + p[1:] for p in principal_parts]
 
         glosses, source_refs, gloss_orig = _clean_glosses(entry["meaning"])
 
         lex_entry: dict = {
-            "headword": hw.lower(),
+            # Preserve the reconstructed case for display: common-noun stems are
+            # lowercase in DICTLINE (so hw is already lowercase), while proper
+            # nouns/adjectives keep their capital (Juno, Roma, Latinus, Sequana).
+            # Force-lowercasing here made the headword ('juno') disagree with its
+            # own case-preserving principal_parts ('Juno, Junonis'). Lookup is
+            # unaffected: the dict is keyed by `normalized` (always case-folded).
+            "headword": hw,
             "normalized_headword": normalized,
             "pos": entry["pos"],
             "decl_which": entry["decl_which"],

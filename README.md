@@ -1,13 +1,13 @@
 <img src="https://raw.githubusercontent.com/latincy/latincy-lexicon/main/assets/latincy-lexicon-logo.jpg" alt="LatinCy Lexicon" width="400">
 
-[![PyPI version](https://img.shields.io/badge/pypi-v0.11.0-orange.svg)](https://pypi.org/project/latincy-lexicon/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.11.1-orange.svg)](https://pypi.org/project/latincy-lexicon/)
 [![Python versions](https://img.shields.io/pypi/pyversions/latincy-lexicon.svg)](https://pypi.org/project/latincy-lexicon/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 **Whitaker's Words as LatinCy pipeline components for Latin NLP.**
 
-`latincy-lexicon` makes the lexical data and morphological analysis engine from [Whitaker's Words](https://mk270.github.io/whitakers-words/) available as spaCy pipeline components, designed for use with [LatinCy](https://huggingface.co/latincy) language models.
+`latincy-lexicon` makes lexical data and morphological analysis available as spaCy pipeline components, designed for use with [LatinCy](https://huggingface.co/latincy) language models. It is based on [Whitaker's Words](https://mk270.github.io/whitakers-words/) and the Perseus Project's [Lewis & Short](https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059) dictionary, though with LatinCy-specific corrections and modifications.
 
 ## Quick Start
 
@@ -98,7 +98,7 @@ for token in doc:
 
 A single component that provides three token extensions:
 
-- `token._.lexicon` — list of dictionary entries matching the token's lemma, with glosses, part of speech, principal parts, and age/frequency metadata. Each entry's `glosses` are cleaned of Whitaker's inline formatting and syntactic notes; an entry may also carry `source_refs` (bibliographic citations such as *L+S* or *Souter*, extracted from the gloss text) and `gloss_orig` (the verbatim original Whitaker senses, present only when the cleanup changed them)
+- `token._.lexicon` — list of dictionary entries matching the token's lemma, with glosses, part of speech, principal parts, and age/frequency metadata. Each entry's `glosses` are cleaned (and sometimes corrected) glosses from Whitaker's inline formatting and syntactic notes; an entry may also carry `source_refs` (bibliographic citations such as *L+S* or *Souter*, extracted from the gloss text) and `gloss_orig` (the verbatim original Whitaker senses, present only when the cleanup changed them)
 - `token._.ww` — full morphological parse list from the Words stem+ending engine, ranked by POS match, morphological features, dependency labels, NER context, and frequency
 - `token._.gloss` — short definition from the top-ranked parse, with Whitaker's inline usage notes and citations removed
 

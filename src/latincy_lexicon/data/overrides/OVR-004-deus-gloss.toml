@@ -1,0 +1,44 @@
+id = "OVR-004"
+date = 2026-07-28
+author = "patrick@diyclassics.org"
+status = "active"
+
+[target]
+# Overrides match on the entry's stem1, not the reconstructed headword. WW
+# stores deus with a capitalised stem "De" (its Christian proper-name sense),
+# decl 2/1, gender M — pin the homograph so this can't drift onto "de" (goddess).
+lemma = "De"
+pos = "N"
+decl_which = 2
+decl_var = 1
+
+[change]
+field = "meaning"
+to = "god; deity, divine being; God (in Christian/Jewish text); image/statue of a god;"
+
+# NB: we deliberately do NOT touch deus's stem case here. WW stores it with a
+# capital stem ("De") to carry the Christian proper-name sense, and the form
+# generator relies on that capital to emit "Deus" as a recoverable variant while
+# keeping the lowercase common paradigm standard (see generator.py and the
+# REG-002 fixture). The lexicon display headword is lowercased for this
+# conflated common+proper entry in build._reconstruct_headword instead.
+
+reason = """
+Whitaker's Words DICTLINE.GEN orders the senses of deus with the Christian
+reading first: "God (Christian text); god; divine essence/being, supreme being;
+statue of god;". For a general-purpose Latin lexicon that leads the wrong way —
+the overwhelmingly common classical sense is the generic "god/deity", and a QC
+pass over the demo bubbles surfaced the top gloss as "God (Christian text)",
+which mis-frames deus for the bulk of the corpus (Vergil, Caesar, etc.).
+
+This override generalises and simplifies: it leads with the classical "god;
+deity, divine being", keeps the Christian/Jewish sense (demoted, and broadened
+from "Christian text" to "Christian/Jewish text"), and preserves the concrete
+"image/statue of a god" sense. The verbatim WW ordering remains recoverable via
+the entry's gloss_orig / _overrides.original_value.
+"""
+reason_short = "WW leads deus with the Christian sense; reorder to the general classical 'god' first."
+
+refs = [
+    "https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059:entry=deus",
+]

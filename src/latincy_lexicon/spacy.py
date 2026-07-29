@@ -840,28 +840,29 @@ _FREQ_SCORE = {"A": 1.0, "B": 0.8, "C": 0.6, "D": 0.4, "E": 0.2, "F": 0.1, "X": 
 
 
 def _rank_by_pos(entries: list, token_pos: str) -> list:
-    """Rank lexicon entries: POS-matching first, then lemma-matched, then by
-    frequency.
+    """Rank lexicon entries: lemma-matched first, then POS-matching, then freq.
 
-    Within each POS group, entries found via the token's lemma outrank entries
-    added via inflectional parses of the surface form. The lemmatizer already
-    committed to a lemma; a same-POS homograph reached only through a surface
-    parse (form ``dea`` also parsing under ``deus``) must not beat it on raw
-    frequency, or downstream citation forms pick the wrong entry.
+    The lemmatizer has already committed to a lemma, so a lemma-matched entry
+    must never be displaced by a *different* headword reached only by surface-
+    parsing the form. POS is the *secondary* signal, not the primary one: Latin
+    possessive determiners (meus, tuus, suus, noster) are UD-tagged ``DET`` but
+    WW-classed ``ADJ``, whose ``ud_pos`` excludes DET — so a POS-first ordering
+    handed the row to any PRON/DET homograph the analyzer produced for the
+    surface form (``mi`` → ``ego`` "I, me"; the possessive lost to the pronoun).
+    Ranking lemma-match above POS-match fixes that, keeps the ``dea``-over-
+    ``deus`` inflection ordering (an inflection match still sorts last), and
+    leaves POS as the tiebreak among entries of equal match type.
     """
     def _key(e: dict) -> tuple:
+        is_infl = e.get("match_type") == "inflection"
+        pos_miss = bool(token_pos) and token_pos not in e.get("ud_pos", [])
         return (
-            e.get("match_type") == "inflection",
+            is_infl,
+            pos_miss,
             -_FREQ_SCORE.get(e.get("freq", "X"), 0.3),
         )
 
-    if not token_pos:
-        return sorted(entries, key=_key)
-    matching = [e for e in entries if token_pos in e.get("ud_pos", [])]
-    other = [e for e in entries if token_pos not in e.get("ud_pos", [])]
-    matching.sort(key=_key)
-    other.sort(key=_key)
-    return matching + other
+    return sorted(entries, key=_key)
 
 
 def _partition_by_pos(parse_dicts: list, token_pos: str) -> tuple[list, list]:

@@ -1,0 +1,34 @@
+id = "OVR-005"
+date = 2026-07-29
+author = "patrick@diyclassics.org"
+status = "active"
+
+[target]
+# WW has two "Sequan" homographs: the river (decl 1/1, geo L = locale) and the
+# Sequani tribe (decl 2/1, geo G = group). Pin the river so the tribe entry —
+# a masculine people — is left untouched.
+lemma = "Sequan"
+pos = "N"
+decl_which = 1
+decl_var = 1
+
+[change]
+field = "gender"
+to = "F"
+
+reason = """
+Whitaker's Words DICTLINE.GEN marks Sequana, the river Seine (decl 1, geo L),
+as masculine (M). Wiktionary records the river as feminine or masculine, and the
+feminine is the standard/expected gender for a first-declension -a river name in
+Latin usage. Correct the exported gender to F. Only the river homograph is
+retargeted; the Sequani tribe (decl 2, geo G) stays masculine.
+
+Surfaced by a QC pass over the latincy-dashboard demo bubbles, where the citation
+rendered "Sequana, Sequanae, m." — see the same session's PROPN-capitalization
+and possessive-ranking fixes.
+"""
+reason_short = "WW marks the river Sequana as m.; Wiktionary gives f./m., standard is f."
+
+refs = [
+    "https://en.wiktionary.org/wiki/Sequana",
+]

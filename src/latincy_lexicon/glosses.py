@@ -27,6 +27,9 @@ _SOURCE_RE = re.compile(
     + r")\b"
 )
 _PAREN_GROUP_RE = re.compile(r"\(([^()]*)\)")
+# Underscore WW uses to bind a phrase into one token ("the_deep"); word-char
+# flanked only, so codes/examples elsewhere are untouched.
+_PHRASE_UNDERSCORE_RE = re.compile(r"(?<=\w)_(?=\w)")
 
 
 def _clean_piece(piece: str) -> str:
@@ -42,6 +45,11 @@ def _clean_piece(piece: str) -> str:
         piece = piece.lstrip("|").strip()
     if piece.startswith("- "):
         piece = piece[2:].strip()
+    # WW joins multi-word phrases with an underscore so they read as a single
+    # token ("the_deep", "the_Gods", "the_one ... the_other"). Restore the space
+    # for display; only underscores flanked by word characters are converted, so
+    # nothing else is disturbed.
+    piece = _PHRASE_UNDERSCORE_RE.sub(" ", piece)
     return piece
 
 
