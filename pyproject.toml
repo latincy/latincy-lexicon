@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
-    {name = "Patrick Burns", email = "patrick@diyclassics.org"}
+    {name = "Patrick J. Burns", email = "patrick@diyclassics.org"}
 ]
 keywords = ["latin", "nlp", "lexicon", "whitakers-words", "spacy"]
 classifiers = [
