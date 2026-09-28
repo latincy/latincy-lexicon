@@ -82,8 +82,31 @@ def data_dir() -> Path:
 
 
 def senses_path() -> Path:
-    """Return path to the bundled lewis_short_senses.json (shipped in wheel)."""
-    return Path(str(resources.files("latincy_lexicon") / "data" / "json" / "lewis_short_senses.json"))
+    """Return path to the bundled L&S sense store (shipped in wheel).
+
+    Since 0.12 the bundled store is ``lewis_short_senses.json.gz`` (compact JSON,
+    gzip — 17 MB instead of the 154 MB the 0.12 store would be uncompressed). Load
+    it with :func:`load_senses`, which also accepts a plain ``.json``; an
+    uncompressed sibling is returned instead when one is present (dev checkouts).
+    """
+    base = resources.files("latincy_lexicon") / "data" / "json"
+    plain = Path(str(base / "lewis_short_senses.json"))
+    if plain.exists():
+        return plain
+    return Path(str(base / "lewis_short_senses.json.gz"))
+
+
+def load_senses(path: str | Path | None = None) -> dict:
+    """Load a L&S sense store (``{entry_id: {key, slug, senses, entry_citations}}``)
+    from ``path`` — ``.json`` or ``.json.gz`` by suffix — or the bundled store."""
+    import gzip
+
+    p = Path(path) if path is not None else senses_path()
+    if p.suffix == ".gz":
+        with gzip.open(p, "rt", encoding="utf-8") as f:
+            return json.load(f)
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def sense_index_path() -> Path:
@@ -100,9 +123,9 @@ def _parse_all(vendor: Path | None = None) -> dict:
 
     Returns dict with keys: entries, inflections, addons, uniques.
     """
+    from latincy_lexicon.parsers.addons import parse_addons
     from latincy_lexicon.parsers.dictline import parse_dictline
     from latincy_lexicon.parsers.inflects import parse_inflects
-    from latincy_lexicon.parsers.addons import parse_addons
     from latincy_lexicon.parsers.uniques import parse_uniques
 
     if vendor is None:

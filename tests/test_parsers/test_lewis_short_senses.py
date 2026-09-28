@@ -10,8 +10,6 @@ against the REAL narro entry fixture and the real TEI (pater depth regression).
 import re
 from pathlib import Path
 
-import pytest
-
 from latincy_lexicon.parsers.lewis_short_senses import (
     is_construction,
     lila_entry_iri,
@@ -20,7 +18,6 @@ from latincy_lexicon.parsers.lewis_short_senses import (
     sense_depth,
     sense_tree_orphans,
 )
-
 from tests.conftest import LS_TEI, skip_no_ls
 
 NARRO = (Path(__file__).parent.parent / "fixtures" / "ls-narro.xml").read_text(
@@ -96,10 +93,18 @@ def test_parse_narro_extracts_real_meaning_senses():
     assert "to dedicate" in glosses
 
 
-def test_parse_narro_collapses_syntactic_inf_node():
-    # the n='I' node whose gloss is just 'inf.' is a construction split → dropped
-    glosses = [s["gloss"].strip().rstrip(".").lower() for s in parse_entry(NARRO, "narro")]
+def test_parse_narro_second_I_merges_with_its_citations():
+    # narro's second <sense n="I"> (the "Lit." sense with ~38 citations) used to be
+    # collapsed as a construction because its first italic ANYWHERE was "inf." (from
+    # "With acc. and inf.", after four examples). It is a top-level sense and must
+    # merge into I, bringing its citations along.
+    senses = parse_entry(NARRO, "narro")
+    glosses = [s["gloss"].strip().rstrip(".").lower() for s in senses]
     assert "inf" not in glosses
+    one_I = next(s for s in senses if s["level"] == "I")
+    assert len(one_I["citations"]) >= 30
+    assert "urn:cts:latinLit:phi0474.phi056.perseus-lat1:9:6:6" in one_I["citations"]
+    assert one_I["display_gloss"].startswith("to tell, relate")
 
 
 def test_parse_narro_mints_sense_iri_with_level_and_perseus_id():
@@ -151,12 +156,144 @@ def test_parse_entry_stamps_perseus_and_resolving_lila_sameas():
 
 def test_is_construction_rule():
     assert is_construction("(a)", "dat.")           # Greek-letter construction variant
-    assert is_construction("I", "inf.")             # bare grammatical marker
+    assert is_construction("I", "inf.")             # bare grammatical marker (depth unknown)
     assert is_construction("I", "pres.")            # positional/tense marker (leaked before)
     assert is_construction("II.A", "fin.")          # "in fin." citation-position marker
     assert not is_construction("II", "to say, speak, tell")  # real meaning
     assert not is_construction("I", "")             # empty structural node is NOT construction
     assert not is_construction("I", "esp. of the mind")  # semantic qualifier, kept
+    # a top-level sense is a major division of meaning whatever its head-note says
+    assert not is_construction("I", "inf.", depth=1)
+    assert not is_construction("II", "absol.", depth=1)
+    assert is_construction("1", "inf.", depth=3)
+
+
+def test_top_level_sense_with_marker_headnote_is_kept_with_its_citations():
+    # accedo / acies pattern: "I. perf. sync., accēstis, Verg. A. 1, 201), to go..."
+    xml = (
+        '<entryFree id="nA" key="accedo"><orth>accedo</orth>'
+        '<sense level="1" n="I" id="nA.0"><hi rend="ital">perf. sync.</hi>, accestis, '
+        '<bibl n="urn:cts:latinLit:phi0690.phi003.perseus-lat2:1:201"><author>Verg.</author> A. 1, 201</bibl>), '
+        '<hi rend="ital">to go or come to</hi>, to approach</sense>'
+        '<sense level="2" n="A" id="nA.1"><hi rend="ital">of persons</hi>: '
+        '<cit><quote lang="la">accedere ad urbem</quote> '
+        '<bibl n="urn:cts:latinLit:phi0474.phi013.perseus-lat1:1:5"><author>Cic.</author> Cat. 1, 5</bibl></cit></sense>'
+        "</entryFree>"
+    )
+    senses = parse_entry(xml, "accedo")
+    levels = {s["level"]: s for s in senses}
+    assert set(levels) == {"I", "I.A"}                     # I kept, A nests under it
+    assert levels["I"]["display_gloss"] == "to go or come to"
+    assert levels["I"]["citations"] == ["urn:cts:latinLit:phi0690.phi003.perseus-lat2:1:201"]
+
+
+def test_marker_italic_after_a_citation_is_not_the_lead_gloss():
+    # the lead gloss is the first italic BEFORE the citation apparatus; "inf." after
+    # an example (narro pattern) and "fin." inside a <bibl> never collapse a sense.
+    xml = (
+        '<entryFree id="nB" key="b"><orth>b</orth>'
+        '<sense level="1" n="I" id="nB.0"><hi rend="ital">to run</hi></sense>'
+        '<sense level="3" n="1" id="nB.1"> Lit.: <cit><quote lang="la">currere per vias</quote> '
+        '<bibl n="urn:cts:latinLit:phi0914.phi001:1:2:3"><author>Liv.</author> 1, 2, 3 <hi rend="ital">fin.</hi></bibl></cit>'
+        '; with <hi rend="ital">inf.</hi>: <cit><quote lang="la">currere videre</quote> '
+        '<bibl n="urn:cts:latinLit:phi0914.phi001:4:5:6"><author>id.</author> 4, 5, 6</bibl></cit></sense>'
+        "</entryFree>"
+    )
+    senses = parse_entry(xml, "b")
+    sub = next(s for s in senses if s["level"] == "I.1")
+    assert sub["gloss"] == ""                                # no lead italic before the first <cit>
+    assert len(sub["citations"]) == 2
+
+
+def test_construction_subsense_citations_reparent_to_parent():
+    # absimilis pattern: I, then Greek-letter (a)/(b) construction variants with the
+    # only citations. They fold into I; the records remember the construction label.
+    xml = (
+        '<entryFree id="nC" key="absimilis"><orth>absimilis</orth>'
+        '<sense level="1" n="I" id="nC.0"><hi rend="ital">unlike</hi></sense>'
+        '<sense level="5" n="(a)" id="nC.1"><hi rend="ital">Absol.</hi>: '
+        '<cit><quote lang="la">falces non absimili forma</quote> '
+        '<bibl n="urn:cts:latinLit:phi0448.phi001.perseus-lat1:3:14:5"><author>Caes.</author> B. G. 3, 14, 5</bibl></cit></sense>'
+        '<sense level="5" n="(b)" id="nC.2"> With <hi rend="ital">dat.</hi>: '
+        '<bibl n="urn:cts:latinLit:phi0978.phi001:8:121"><author>Plin.</author> 8, 33, 51, § 121</bibl></sense>'
+        "</entryFree>"
+    )
+    senses = parse_entry(xml, "absimilis")
+    assert [s["level"] for s in senses] == ["I"]
+    one = senses[0]
+    assert one["citations"] == [
+        "urn:cts:latinLit:phi0448.phi001.perseus-lat1:3:14:5",
+        "urn:cts:latinLit:phi0978.phi001:8:121",
+    ]
+    labels = [r["construction_label"] for r in one["citation_records"]]
+    assert labels == ["(a)", "(b)"]
+    quoted = one["citation_records"][0]
+    assert quoted["has_quote"] and quoted["quote"] == "falces non absimili forma"
+    assert quoted["n_words"] == 4 and quoted["in_cit"] and quoted["urn_source"] == "perseus"
+    bare = one["citation_records"][1]
+    assert not bare["has_quote"] and bare["n_words"] == 0 and not bare["in_cit"]
+
+
+def test_construction_at_top_of_entry_is_kept_not_orphaned():
+    # nothing kept yet → a would-be construction cannot fold into a parent; keep it.
+    xml = (
+        '<entryFree id="nD" key="d"><orth>d</orth>'
+        '<sense level="5" n="(a)" id="nD.0"><hi rend="ital">Absol.</hi>: '
+        '<bibl n="urn:cts:latinLit:phi0474.phi013:1:5"><author>Cic.</author> Cat. 1, 5</bibl></sense>'
+        "</entryFree>"
+    )
+    senses = parse_entry(xml, "d")
+    assert len(senses) == 1 and senses[0]["citations"] == ["urn:cts:latinLit:phi0474.phi013:1:5"]
+
+
+def test_ib_anaphora_fills_work_from_the_preceding_bibl():
+    xml = (
+        '<entryFree id="nE" key="e"><orth>e</orth>'
+        '<sense level="1" n="I" id="nE.0"><hi rend="ital">to say</hi>: '
+        '<cit><quote lang="la">alpha beta gamma</quote> '
+        '<bibl n="urn:cts:latinLit:phi0474.phi056.perseus-lat1:6:1:6"><author>Cic.</author> Fam. 6, 1, 6</bibl></cit>: '
+        '<cit><quote lang="la">delta epsilon zeta</quote> <bibl><author>id.</author> ib. 2, 10, 3</bibl></cit>; '
+        '<bibl n="urn:cts:latinLit:phi0978.phi001:6:84"><author>Plin.</author> 6, 22, 24, § 84</bibl>: '
+        '<cit><quote lang="la">eta theta iota</quote> <bibl><author>id.</author> ib. 7, 45, 46, § 150</bibl></cit>; '
+        '<bibl><author>id.</author> 20 praef.</bibl></sense>'
+        "</entryFree>"
+    )
+    recs = parse_entry(xml, "e")[0]["citation_records"]
+    assert [r["urn_source"] for r in recs] == [
+        "perseus", "anaphora_fill", "perseus", "anaphora_fill", "anaphora_author"
+    ]
+    assert recs[1]["urn"] == "urn:cts:latinLit:phi0474.phi056.perseus-lat1:2:10:3"
+    assert recs[3]["urn"] == "urn:cts:latinLit:phi0978.phi001:7:150"   # book + § section
+    assert recs[4]["urn"] == "urn:cts:latinLit:phi0978"                 # author only
+    assert [r["anaphoric"] for r in recs] == [False, True, False, True, True]
+    assert [r["ordinal"] for r in recs] == [1, 2, 3, 4, 5]
+
+
+def test_anaphora_after_an_unresolved_bibl_stays_unresolved():
+    # abdicatio: "Cod. Just. 6, 31, 6" has no URN, so the following "ib." must not
+    # skip back to an earlier citation.
+    xml = (
+        '<entryFree id="nF" key="abdicatio"><orth>abdicatio</orth>'
+        '<sense level="1" n="I" id="nF.0"><hi rend="ital">a renouncing</hi>: '
+        '<bibl n="urn:cts:latinLit:phi1002.phi001:7:4:27"><author>Quint.</author> 7, 4, 27</bibl>; '
+        '<cit><quote lang="la">hereditatis,</quote> <bibl><author>Cod. Just.</author> 6, 31, 6</bibl></cit>: '
+        '<cit><quote lang="la">liberorum,</quote> <bibl><author>ib.</author> 6, 8, 47</bibl></cit></sense>'
+        "</entryFree>"
+    )
+    recs = parse_entry(xml, "abdicatio")[0]["citation_records"]
+    assert recs[1]["urn"] is None and recs[1]["urn_source"] is None and not recs[1]["anaphoric"]
+    assert recs[2]["urn"] is None and recs[2]["anaphoric"]
+    assert recs[2]["n_words"] == 1                       # "liberorum," is a one-word clip
+
+
+def test_entry_level_citations_are_returned_separately():
+    from latincy_lexicon.parsers.lewis_short_senses import parse_entry_full
+
+    senses, entry_cits = parse_entry_full(NARRO, "narro")
+    assert [c["location"] for c in entry_cits] == ["etym"]
+    assert entry_cits[0]["urn"] == "urn:cts:latinLit:phi1236.phi001"   # Fest. p. 95
+    assert entry_cits[0]["ordinal"] == 1
+    assert all(entry_cits[0]["urn"] not in s["citations"] for s in senses)
 
 
 _PATER_RE = re.compile(r'<entryFree\b[^>]*\bkey="pater[^"]*".*?</entryFree>', re.DOTALL)

@@ -22,7 +22,7 @@ from spacy.language import Language
 from spacy.tokens import Doc, Token
 
 from latincy_lexicon.align.normalize import normalize_latin
-from latincy_lexicon.build import sense_index_path, senses_path
+from latincy_lexicon.build import load_senses, sense_index_path, senses_path
 from latincy_lexicon.glosses import (
     extract_sources,
     split_glosses,
@@ -171,8 +171,7 @@ class WhitakersWords:
             with open(self._ls_index_path) as f:
                 self._ls_index = json.load(f)
         if self._ls_senses_path and not self._ls_senses:
-            with open(self._ls_senses_path) as f:
-                self._ls_senses = json.load(f)
+            self._ls_senses = load_senses(self._ls_senses_path)
         self._loaded = True
 
     def _ls_gloss(self, lemma: str) -> Optional[str]:
@@ -522,8 +521,7 @@ class LewisShort:
         if self._senses_loaded:
             return
         if self._senses_path and not self._senses:
-            with open(self._senses_path) as f:
-                self._senses = json.load(f)
+            self._senses = load_senses(self._senses_path)
         self._senses_loaded = True
 
     def __call__(self, doc: Doc) -> Doc:

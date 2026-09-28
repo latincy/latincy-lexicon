@@ -19,10 +19,33 @@ from latincy_lexicon.models import (
     Addon,
     DictEntry,
     Inflection,
+    LewisShortSense,
     LexiconEntry,
     Trick,
     Unique,
 )
+
+
+def test_lewis_short_sense_roundtrips_citation_records():
+    d = {
+        "id": "https://w3id.org/latincy/lemma/narro/sense/I",
+        "level": "I", "n": "I", "gloss": "to tell", "display_gloss": "to tell",
+        "sameAs": {"perseus_ls_id": "n30406.0", "perseus": None, "lila": None},
+        "citations": ["urn:cts:latinLit:phi0474.phi056.perseus-lat1:9:6:6"],
+        "citation_records": [{
+            "urn": "urn:cts:latinLit:phi0474.phi056.perseus-lat1:9:6:6",
+            "quote": "ego tibi ea narro", "bibl_text": "Cic. Fam. 9, 6, 6",
+            "has_quote": True, "n_words": 4, "ordinal": 2, "in_cit": True,
+            "anaphoric": False, "urn_source": "perseus", "construction_label": None,
+        }],
+        "citation_tr": {},
+    }
+    s = LewisShortSense.from_dict(d)
+    assert s.citation_records[0]["n_words"] == 4
+    assert s.to_dict() == d
+    # a pre-0.12 dict without records still loads, and to_dict emits the key
+    old = {k: v for k, v in d.items() if k != "citation_records"}
+    assert LewisShortSense.from_dict(old).to_dict()["citation_records"] == []
 
 
 def test_dict_entry_creation():

@@ -153,8 +153,12 @@ class LewisShortSense:
     perseus_ls_id: str = ""      # Perseus L&S sense xml:id, e.g. "n30406.0"
     perseus: Optional[str] = None        # resolvable Hopper entry URL
     lila: Optional[str] = None           # LiLa L&S sense-node IRI
-    citations: tuple[str, ...] = ()      # CTS bibl URNs (evidence)
+    citations: tuple[str, ...] = ()      # CTS bibl URNs (evidence), incl. reparented + anaphora-filled
     citation_tr: tuple[tuple[str, str], ...] = ()  # (urn, per-citation gloss) pairs
+    #: structured per-<bibl> records: urn, quote, bibl_text, has_quote, n_words,
+    #: ordinal, in_cit, anaphoric, urn_source (perseus | anaphora_fill |
+    #: anaphora_author | None), construction_label (set when reparented)
+    citation_records: tuple[dict, ...] = ()
 
     @classmethod
     def from_dict(cls, d: dict) -> "LewisShortSense":
@@ -170,6 +174,7 @@ class LewisShortSense:
             lila=same.get("lila"),
             citations=tuple(d.get("citations", ())),
             citation_tr=tuple(d.get("citation_tr", {}).items()),
+            citation_records=tuple(dict(r) for r in d.get("citation_records", ())),
         )
 
     def to_dict(self) -> dict:
@@ -185,6 +190,7 @@ class LewisShortSense:
                 "lila": self.lila,
             },
             "citations": list(self.citations),
+            "citation_records": [dict(r) for r in self.citation_records],
             "citation_tr": dict(self.citation_tr),
         }
 

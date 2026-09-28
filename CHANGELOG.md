@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.12.0] — 2026-09-28
+
+Structured citations for the Lewis & Short sense store, and a parser fix that was
+silently dropping a fifth of the dictionary's evidence.
+
+A per-citation audit (latincy-wsd, 2026-09-28) found the sense parser discarding
+58,457 CTS citations: `is_construction()` read a sense's "lead gloss" as the first
+italic *anywhere* in it, so a top-level sense whose first italic was a marker buried
+after several examples (*narro* I: "With acc. and *inf.*"), a `fin.`/`init.`
+position marker inside a `<bibl>`, or a morphological head-note (*accedo* I:
+"*perf. sync.*, accēstis…") was folded away as a "construction" — and every
+sub-sense after it cascaded into orphans. 1,996 entries parsed to zero senses for
+this reason. Downstream, the store kept only bare URN strings, so latincy-wsd had
+to re-scan the TEI for quote text, against the agreed viewer → wsd → lexicon DAG.
+
+### Changed
+- **Lead gloss = first italic before the citation apparatus.** `_own_gloss` stops at
+  the sense's first `<cit>`/`<bibl>`; italics inside or after citations are never the
+  lead gloss.
+- **A depth-1 (Roman-numeral) sense is never a construction.** `is_construction()`
+  takes an optional `depth`; `parse_entry` passes it.
+- **Construction sub-senses reparent instead of dropping.** Greek-letter `(a)(b)…`
+  and marker-led sub-senses fold their citations into the surviving parent
+  (`construction_label` records which). A would-be construction with no kept parent
+  (top of entry) is kept as a sense.
+- **`citations` now includes reparented and anaphora-filled URNs** (see below).
+  Store-wide: URN citations 227,924 → 298,684; entries with senses 42,982 → 44,978;
+  senses 84,091 → 87,952; citation-bearing senses 55,438 → 59,880. *narro* I goes
+  from 0 to 33 citations.
+
+### Added
+- **`citation_records`** on every sense: one record per `<bibl>` —
+  `{urn, quote, bibl_text, has_quote, n_words, ordinal, in_cit, anaphoric,
+  urn_source, construction_label}`. `ordinal` is document order within the entry;
+  `urn_source` is `perseus` (Perseus-minted `@n`), `anaphora_fill`, `anaphora_author`,
+  or `None` (no URN). 376,372 sense-level records; 223,326 carry a quote.
+- **Anaphora resolution.** `id.`/`ib.`/`ibid.`/`idem` bibls with no `@n` resolve
+  against the immediately preceding bibl: `ib.` → its work + this bibl's passage
+  numbers (Pliny-style `§` refs → book + section), `id.` alone → its textgroup only.
+  If the preceding bibl has no URN the anaphor stays unresolved (never skips back).
+  10,193 `anaphora_fill` + 3,228 `anaphora_author` URNs recovered.
+- **`entry_citations`** per store entry: bibls outside any `<sense>` (`<etym>` /
+  entry head), tagged `location`. 3,421 records.
+- **`parse_entry_full()`** (exported as `parse_lewis_short_entry_full`) returning
+  `(senses, entry_citations)`; `parse_entry` is unchanged in signature.
+- **`LewisShortSense.citation_records`**; `to_dict` always emits the key,
+  `from_dict` accepts pre-0.12 dicts.
+- **`load_senses()`** (exported from the package root) — opens a sense store whether
+  it is `.json` or `.json.gz`, defaulting to the bundled one.
+
+### Packaging
+- The bundled sense store is now **`lewis_short_senses.json.gz`** (compact JSON,
+  gzip): 17 MB in the wheel instead of 50 MB, where the uncompressed 0.12 store
+  would be 154 MB (over PyPI's per-file limit). `senses_path()` returns the bundled
+  `.gz` unless an uncompressed sibling is present; use `load_senses()` rather than
+  `json.load(open(senses_path()))`. `build-ls` writes both files.
+
 ## [0.11.0] — 2026-07-28
 
 Fixes silently-dropped glosses on lemmatizer misses in `whitakers_words`, by
