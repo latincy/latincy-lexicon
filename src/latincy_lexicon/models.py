@@ -157,7 +157,9 @@ class LewisShortSense:
     citation_tr: tuple[tuple[str, str], ...] = ()  # (urn, per-citation gloss) pairs
     #: structured per-<bibl> records: urn, quote, bibl_text, has_quote, n_words,
     #: ordinal, in_cit, anaphoric, urn_source (perseus | anaphora_fill |
-    #: anaphora_author | None), construction_label (set when reparented)
+    #: anaphora_author | None), construction_label (set when reparented),
+    #: sense_xml_id (the Perseus xml:id of the <sense> the bibl physically sits in —
+    #: differs from this sense's own id when the record was reparented or merged)
     citation_records: tuple[dict, ...] = ()
 
     @classmethod

@@ -227,6 +227,8 @@ def test_construction_subsense_citations_reparent_to_parent():
     ]
     labels = [r["construction_label"] for r in one["citation_records"]]
     assert labels == ["(a)", "(b)"]
+    # the records remember the physical sense node they came from, not the parent
+    assert [r["sense_xml_id"] for r in one["citation_records"]] == ["nC.1", "nC.2"]
     quoted = one["citation_records"][0]
     assert quoted["has_quote"] and quoted["quote"] == "falces non absimili forma"
     assert quoted["n_words"] == 4 and quoted["in_cit"] and quoted["urn_source"] == "perseus"

@@ -33,7 +33,9 @@ to re-scan the TEI for quote text, against the agreed viewer → wsd → lexicon
 ### Added
 - **`citation_records`** on every sense: one record per `<bibl>` —
   `{urn, quote, bibl_text, has_quote, n_words, ordinal, in_cit, anaphoric,
-  urn_source, construction_label}`. `ordinal` is document order within the entry;
+  urn_source, construction_label, sense_xml_id}`. `sense_xml_id` is the Perseus
+  xml:id of the `<sense>` the bibl physically sits in (differs from the owning
+  sense's id when reparented or merged). `ordinal` is document order within the entry;
   `urn_source` is `perseus` (Perseus-minted `@n`), `anaphora_fill`, `anaphora_author`,
   or `None` (no URN). 376,372 sense-level records; 223,326 carry a quote.
 - **Anaphora resolution.** `id.`/`ib.`/`ibid.`/`idem` bibls with no `@n` resolve

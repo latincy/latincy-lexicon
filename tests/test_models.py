@@ -37,6 +37,7 @@ def test_lewis_short_sense_roundtrips_citation_records():
             "quote": "ego tibi ea narro", "bibl_text": "Cic. Fam. 9, 6, 6",
             "has_quote": True, "n_words": 4, "ordinal": 2, "in_cit": True,
             "anaphoric": False, "urn_source": "perseus", "construction_label": None,
+            "sense_xml_id": "n30406.1",
         }],
         "citation_tr": {},
     }

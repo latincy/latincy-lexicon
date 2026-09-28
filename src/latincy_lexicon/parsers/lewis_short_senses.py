@@ -233,6 +233,7 @@ def _resolve_bibls(root: ET.Element) -> dict[ET.Element, dict]:
         anaphoric = author.lower().rstrip(".") in ANAPHORA or bool(_ANAPHORA_LEAD.match(text))
         cit = None
         in_etym = False
+        sense_xml_id = None
         p = parent.get(b)
         while p is not None:
             if p.tag == "cit" and cit is None:
@@ -240,6 +241,7 @@ def _resolve_bibls(root: ET.Element) -> dict[ET.Element, dict]:
             elif p.tag == "etym":
                 in_etym = True
             elif p.tag == "sense":
+                sense_xml_id = p.get("id") or None
                 break
             p = parent.get(p)
         quote = None
@@ -273,6 +275,7 @@ def _resolve_bibls(root: ET.Element) -> dict[ET.Element, dict]:
             "anaphoric": anaphoric,
             "urn_source": source,
             "construction_label": None,
+            "sense_xml_id": sense_xml_id,  # the physical <sense> node the bibl sits in
             "_in_etym": in_etym,
         }
         out[b] = rec
