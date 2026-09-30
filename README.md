@@ -128,7 +128,7 @@ doc[0]._.lewis_short
 Token extensions:
 
 - `token._.lewis_short` — list of L&S entry handles for the token's lemma, homographs ranked best-first by POS compatibility. Handles are lean (`id`, `key`, `orth`, `pos`, `gen`, `itype`); pass `config={"include_text": True}` to inline the full article text, or fetch it on demand via `nlp.get_pipe("lewis_short").get_entry(id)`.
-- `token._.lewis_short_senses` — `None` by default. Pass `config={"attach_senses": True}` to populate it with the **top-ranked** entry's structured senses as a lean list of `{"level", "n", "display_gloss"}` dicts. Opt-in because the sense store is ~48 MB (loaded lazily on first use). Full sense detail — raw `gloss`, `citations`, `sameAs` linked-data ids — stays available via `nlp.get_pipe("lewis_short").get_senses(id)`.
+- `token._.lewis_short_senses` — `None` by default. Pass `config={"attach_senses": True}` to populate it with the **top-ranked** entry's structured senses as a lean list of `{"level", "n", "display_gloss"}` dicts. Opt-in because the sense store is ~154 MB once loaded (17 MB gzipped; loaded lazily on first use). Full sense detail — raw `gloss`, `citations`, `sameAs` linked-data ids — stays available via `nlp.get_pipe("lewis_short").get_senses(id)`.
 
 No sense *selection* is performed — all senses of the top-ranked entry are attached in dictionary order; picking the contextually right one is future WSD work.
 
