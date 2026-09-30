@@ -1,6 +1,6 @@
 """latincy-lexicon: Whitaker's Words data for LatinCy."""
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 from latincy_lexicon.build import (  # noqa: F401
     build_analyzer,

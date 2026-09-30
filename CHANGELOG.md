@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0] — unreleased
+
+### Changed
+- **Homograph sense IRIs are entry-distinct.** When several sense-bearing entries
+  share a slug, each mints under `{slug}{n}` (`n` = 1-based position among them in
+  L&S order): `…/lemma/cum1/sense/I` (prep.), `…/lemma/cum2/sense/I` (conj.).
+  Single-entry slugs keep their bare IRIs unchanged.
+- Store entries carry `iri_slug` alongside `key` and `slug`.
+- IRI values change for 1,273 slugs / 2,669 entries; no other store field changes.
+
+### Fixed
+- 1,739 duplicate sense IRIs in the 0.12.0 store (homograph entries of one slug
+  minted identical IRIs). Now 0.
+
 ## [0.12.0] — 2026-09-28
 
 Structured citations for the Lewis & Short sense store, and a parser fix that was
