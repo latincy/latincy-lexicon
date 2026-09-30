@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.13.0] — unreleased
+## [0.13.0] — 2026-09-30
 
 ### Changed
 - **Homograph sense IRIs are entry-distinct.** When several sense-bearing entries
