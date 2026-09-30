@@ -2,6 +2,8 @@
 
 ## [0.13.0] — 2026-09-30
 
+Includes all of [0.12.0] below, which was not published separately.
+
 ### Changed
 - **Homograph sense IRIs are entry-distinct.** When several sense-bearing entries
   share a slug, each mints under `{slug}{n}` (`n` = 1-based position among them in
@@ -11,10 +13,10 @@
 - IRI values change for 1,273 slugs / 2,669 entries; no other store field changes.
 
 ### Fixed
-- 1,739 duplicate sense IRIs in the 0.12.0 store (homograph entries of one slug
-  minted identical IRIs). Now 0.
+- 1,739 duplicate sense IRIs in the 0.12.0 store build (homograph entries of one
+  slug minted identical IRIs). Now 0.
 
-## [0.12.0] — 2026-09-28
+## [0.12.0] — unpublished (ships in 0.13.0)
 
 Structured citations for the Lewis & Short sense store, and a parser fix that was
 silently dropping a fifth of the dictionary's evidence.
