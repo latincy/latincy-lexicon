@@ -145,7 +145,8 @@ class LewisShortSense:
     A typed view over the parser's sense dict. ``to_dict`` reproduces that dict
     shape exactly, so ``LewisShortSense.from_dict(d).to_dict() == d``.
     """
-    id: str                      # minted sense IRI: w3id.org/latincy/lemma/{slug}/sense/{path}
+    id: str                      # minted sense IRI: w3id.org/latincy/lemma/{slug}/sense/{path};
+                                 # homograph entries use {slug}{n} ("cum1", "cum2")
     level: str                   # tree path label, e.g. "I", "I.A", "II.B"
     n: str = ""                  # original L&S @n label
     gloss: str = ""              # lead italic gloss (raw)
