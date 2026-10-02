@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.13.0] — 2026-09-30
+## [0.13.0] — 2026-10-02
 
 Includes all of [0.12.0] below, which was not published separately.
 
