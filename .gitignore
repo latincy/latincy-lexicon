@@ -55,7 +55,9 @@ data/raw/
 
 # Dev-only modules (kept locally, excluded from published wheel)
 src/latincy_lexicon/db/
-src/latincy_lexicon/export/
+src/latincy_lexicon/export/*
+!src/latincy_lexicon/export/__init__.py
+!src/latincy_lexicon/export/lewis_short.py
 src/latincy_lexicon/align/headword.py
 src/latincy_lexicon/align/report.py
 tests/test_db/
