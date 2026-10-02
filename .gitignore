@@ -61,6 +61,9 @@ src/latincy_lexicon/export/*
 src/latincy_lexicon/align/headword.py
 src/latincy_lexicon/align/report.py
 tests/test_db/
-tests/test_export/
+tests/test_export/*
+!tests/test_export/__init__.py
+!tests/test_export/test_lewis_short_store.py
+!tests/test_export/test_lewis_short_senses_store.py
 tests/test_align/test_headword.py
 scratch/
