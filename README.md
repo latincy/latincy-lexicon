@@ -217,4 +217,3 @@ The original Python code in this project is released under the [MIT License](LIC
 The Whitaker's Words data and analysis logic incorporated in this project are copyright William A. Whitaker (1936–2010) and distributed under his original permissive license (see [LICENSE](LICENSE) for full text).
 
 Perseus Project's [Lewis & Short](https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059) dictionary is [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
-
