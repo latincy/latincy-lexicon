@@ -49,7 +49,6 @@ lewis_short = "latincy_lexicon.spacy:create_lewis_short"
 packages = ["src/latincy_lexicon"]
 exclude = [
     "src/latincy_lexicon/db",
-    "src/latincy_lexicon/export",
     "src/latincy_lexicon/align/headword.py",
     "src/latincy_lexicon/align/report.py",
 ]

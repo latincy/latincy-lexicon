@@ -98,3 +98,24 @@ def test_load_senses_meta_carries_source_and_licence():
     assert meta["modified"] is True
     assert meta["source"]["license_url"] == "https://creativecommons.org/licenses/by-sa/4.0/"
     assert meta["source"]["file"] == "lat.ls.perseus-eng2.xml"
+
+
+def test_senses_path_prefers_gz_over_plain_sibling(tmp_path, monkeypatch):
+    import latincy_lexicon.build as build
+
+    (tmp_path / "data" / "json").mkdir(parents=True)
+    (tmp_path / "data" / "json" / "lewis_short_senses.json").write_text("{}")
+    (tmp_path / "data" / "json" / "lewis_short_senses.json.gz").write_bytes(b"")
+    monkeypatch.setattr(build.resources, "files", lambda _pkg: tmp_path)
+    assert build.senses_path().name == "lewis_short_senses.json.gz"
+
+
+def test_load_senses_meta_falls_back_when_meta_not_first(tmp_path):
+    import json
+
+    from latincy_lexicon.build import load_senses, load_senses_meta
+
+    p = tmp_path / "store.json"
+    p.write_text(json.dumps({"n1": {"key": "a"}, "_meta": {"license": "X"}}, indent=1))
+    assert load_senses_meta(p) == {"license": "X"}
+    assert "_meta" not in load_senses(p)

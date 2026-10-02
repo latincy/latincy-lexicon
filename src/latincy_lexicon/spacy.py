@@ -462,8 +462,8 @@ class LewisShort:
     ``token._.lewis_short_senses`` with the top-ranked entry's structured
     senses as a lean list of ``{"level", "n", "display_gloss"}`` dicts (raw
     ``gloss``, ``citations`` and ``sameAs`` stay behind :meth:`get_senses`).
-    Off by default: the sense store is ~48 MB and loads lazily on the first
-    call that needs it.
+    Off by default: the sense store is ~154 MB uncompressed (17 MB gzipped) and
+    loads lazily on the first call that needs it.
     """
 
     # Short metadata fields kept on the lean per-token handle (text excluded).
@@ -553,7 +553,7 @@ class LewisShort:
 
             # Tier-1 sense attachment: the top-ranked entry's senses, lean.
             # No selection logic — that's the WSD bridge (tier 2). get_senses
-            # lazy-loads the ~48 MB store, which is why this is opt-in.
+            # lazy-loads the ~154 MB (uncompressed) store, which is why this is opt-in.
             if self._attach_senses:
                 token._.lewis_short_senses = [
                     {f: s[f] for f in self._SENSE_FIELDS if f in s}
@@ -585,7 +585,7 @@ class LewisShort:
         """Return the structured L&S sense list for an entry id (``[]`` if absent).
 
         Requires the component to have been configured with ``ls_senses_path``
-        (the ``lewis_short_senses.json`` build artifact); loads it on first use.
+        (the ``lewis_short_senses.json[.gz]`` build artifact); loads it on first use.
         Each sense follows ``parsers.lewis_short_senses.parse_entry`` — ``id``,
         ``level``, ``gloss``, ``display_gloss``, ``sameAs``, ``citations``,
         ``citation_tr``.

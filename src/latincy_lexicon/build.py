@@ -86,14 +86,15 @@ def senses_path() -> Path:
 
     Since 0.12 the bundled store is ``lewis_short_senses.json.gz`` (compact JSON,
     gzip — 17 MB instead of the 154 MB the 0.12 store would be uncompressed). Load
-    it with :func:`load_senses`, which also accepts a plain ``.json``; an
-    uncompressed sibling is returned instead when one is present (dev checkouts).
+    it with :func:`load_senses`, which also accepts a plain ``.json``. The ``.gz`` is
+    authoritative; a plain ``.json`` is returned only when no ``.gz`` is present, so
+    a stale uncompressed sibling can never shadow the shipped store.
     """
     base = resources.files("latincy_lexicon") / "data" / "json"
-    plain = Path(str(base / "lewis_short_senses.json"))
-    if plain.exists():
-        return plain
-    return Path(str(base / "lewis_short_senses.json.gz"))
+    gz = Path(str(base / "lewis_short_senses.json.gz"))
+    if gz.exists():
+        return gz
+    return Path(str(base / "lewis_short_senses.json"))
 
 
 def load_senses(path: str | Path | None = None) -> dict:
@@ -108,7 +109,24 @@ def load_senses(path: str | Path | None = None) -> dict:
 
 
 def load_senses_meta(path: str | Path | None = None) -> dict:
-    """Return the sense store's ``_meta`` provenance header (``{}`` if absent)."""
+    """Return the sense store's ``_meta`` provenance header (``{}`` if absent).
+
+    ``_meta`` is the first key of a compact store, so it is read from the head of
+    the file without parsing the 154 MB body; other layouts fall back to a full load.
+    """
+    import gzip
+
+    p = Path(path) if path is not None else senses_path()
+    opener = gzip.open if p.suffix == ".gz" else open
+    with opener(p, "rt", encoding="utf-8") as f:
+        head = f.read(65536)
+    prefix = '{"_meta":'
+    if head.startswith(prefix):
+        try:
+            meta, _ = json.JSONDecoder().raw_decode(head, len(prefix))
+            return meta
+        except ValueError:
+            pass
     return _read_senses(path).get("_meta", {})
 
 

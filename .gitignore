@@ -53,7 +53,8 @@ data/db/
 data/json/
 data/raw/
 
-# Dev-only modules (kept locally, excluded from published wheel)
+# Dev-only modules (kept locally; the other export/ modules never ship because they
+# are ignored here — export/lewis_short.py is tracked and ships in the wheel)
 src/latincy_lexicon/db/
 src/latincy_lexicon/export/*
 !src/latincy_lexicon/export/__init__.py

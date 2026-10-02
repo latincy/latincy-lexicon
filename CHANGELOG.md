@@ -10,6 +10,10 @@ Includes all of [0.12.0] below, which was not published separately.
   `load_senses()` strips it, so loader consumers see the same entries-only dict;
   code that reads the JSON directly must skip the `_meta` key.
 - `load_senses_meta()` returns the header.
+- `latincy_lexicon.export.lewis_short` (the L&S store builder) is tracked and ships
+  in the wheel; `latincy-lexicon build-ls` works from an install given a TEI path.
+- `senses_path()` returns the `.json.gz` whenever present; a plain `.json` is only
+  a fallback.
 - Package metadata declares `MIT AND CC-BY-SA-4.0` (code MIT; L&S-derived data
   CC BY-SA 4.0), replacing the MIT-only licence classifier (deprecated by PEP 639
   alongside a licence expression); `CITATION.cff` gains a Perseus L&S `references`
@@ -29,6 +33,16 @@ Includes all of [0.12.0] below, which was not published separately.
 ### Fixed
 - 1,739 duplicate sense IRIs in the 0.12.0 store build (homograph entries of one
   slug minted identical IRIs). Now 0.
+
+### Known limits
+- Anaphora-filled URNs (`urn_source` `anaphora_fill` 10,193 / `anaphora_author`
+  3,228 records) are reconstructions and also appear in a sense's `citations`;
+  filter on `citation_records[].urn_source` for Perseus-minted URNs only.
+- `ib.` passage numbers are every digit run in the reference tail:
+  `ib. 3, 5, 2 (al. 4)` → `3/5/2/4`; Roman-numeral books are not parsed
+  (`ib. IV, 18` → `18`).
+- Homograph IRI numbers (`cum1`, `cum2`) are positions among the sense-bearing
+  entries of one build; a scoped build (`lemmas=`) or a parser change can renumber.
 
 ## [0.12.0] — unpublished (ships in 0.13.0)
 
