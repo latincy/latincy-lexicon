@@ -7,6 +7,7 @@ from latincy_lexicon.build import (  # noqa: F401
     build_lexicon,
     build_lexicon_and_analyzer,
     load_senses,
+    load_senses_meta,
     sense_index_path,
     senses_path,
 )

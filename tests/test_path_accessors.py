@@ -82,3 +82,19 @@ def test_accessors_importable_from_package_root():
     assert callable(senses_path)
     assert callable(sense_index_path)
     assert callable(load_senses)
+
+
+def test_load_senses_strips_provenance_header():
+    from latincy_lexicon.build import load_senses
+
+    assert "_meta" not in load_senses()
+
+
+def test_load_senses_meta_carries_source_and_licence():
+    from latincy_lexicon.build import load_senses_meta
+
+    meta = load_senses_meta()
+    assert meta["license"] == "CC-BY-SA-4.0"
+    assert meta["modified"] is True
+    assert meta["source"]["license_url"] == "https://creativecommons.org/licenses/by-sa/4.0/"
+    assert meta["source"]["file"] == "lat.ls.perseus-eng2.xml"

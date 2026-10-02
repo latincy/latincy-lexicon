@@ -98,7 +98,21 @@ def senses_path() -> Path:
 
 def load_senses(path: str | Path | None = None) -> dict:
     """Load a L&S sense store (``{entry_id: {key, slug, senses, entry_citations}}``)
-    from ``path`` — ``.json`` or ``.json.gz`` by suffix — or the bundled store."""
+    from ``path`` — ``.json`` or ``.json.gz`` by suffix — or the bundled store.
+
+    The store's ``_meta`` provenance header (source, licence) is dropped, so the
+    result is entries only; read it with :func:`load_senses_meta`."""
+    store = _read_senses(path)
+    store.pop("_meta", None)
+    return store
+
+
+def load_senses_meta(path: str | Path | None = None) -> dict:
+    """Return the sense store's ``_meta`` provenance header (``{}`` if absent)."""
+    return _read_senses(path).get("_meta", {})
+
+
+def _read_senses(path: str | Path | None) -> dict:
     import gzip
 
     p = Path(path) if path is not None else senses_path()
