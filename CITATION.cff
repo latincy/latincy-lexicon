@@ -10,3 +10,18 @@ license: MIT
 version: "0.13.0"
 date-released: "2026-09-30"
 repository-code: "https://github.com/latincy/latincy-lexicon"
+references:
+  - type: dictionary
+    title: "A Latin Dictionary"
+    authors:
+      - family-names: Lewis
+        given-names: Charlton T.
+      - family-names: Short
+        given-names: Charles
+    publisher:
+      name: "Trustees of Tufts University (Perseus Project)"
+      city: Medford
+      region: MA
+    url: "https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059"
+    license: CC-BY-SA-4.0
+    notes: "Perseus machine-readable edition (lat.ls.perseus-eng2.xml); source of the bundled Lewis & Short index and sense store."
