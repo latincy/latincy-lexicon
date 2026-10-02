@@ -4,6 +4,17 @@
 
 Includes all of [0.12.0] below, which was not published separately.
 
+### Added
+- **`_meta` provenance header** in `lewis_short_senses.json[.gz]`: source (Perseus
+  L&S edition), `license` (CC-BY-SA-4.0) with URL, `modified: true`, `generator`.
+  `load_senses()` strips it, so loader consumers see the same entries-only dict;
+  code that reads the JSON directly must skip the `_meta` key.
+- `load_senses_meta()` returns the header.
+- Package metadata declares `MIT AND CC-BY-SA-4.0` (code MIT; L&S-derived data
+  CC BY-SA 4.0), replacing the MIT-only licence classifier (deprecated by PEP 639
+  alongside a licence expression); `CITATION.cff` gains a Perseus L&S `references`
+  entry.
+
 ### Changed
 - **Homograph sense IRIs are entry-distinct.** When several sense-bearing entries
   share a slug, each mints under `{slug}{n}` (`n` = 1-based position among them in
@@ -11,6 +22,9 @@ Includes all of [0.12.0] below, which was not published separately.
   Single-entry slugs keep their bare IRIs unchanged.
 - Store entries carry `iri_slug` alongside `key` and `slug`.
 - IRI values change for 1,273 slugs / 2,669 entries; no other store field changes.
+- **Wheel size 6.5 → 19.0 MB.** The sense store ships gzipped
+  (`lewis_short_senses.json.gz`, 17.4 MB; was 49.9 MB plain JSON) and now carries
+  structured `citation_records`.
 
 ### Fixed
 - 1,739 duplicate sense IRIs in the 0.12.0 store build (homograph entries of one

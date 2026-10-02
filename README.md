@@ -7,7 +7,7 @@
 
 **Whitaker's Words as LatinCy pipeline components for Latin NLP.**
 
-`latincy-lexicon` makes lexical data and morphological analysis available as spaCy pipeline components, designed for use with [LatinCy](https://huggingface.co/latincy) language models. It is based on [Whitaker's Words](https://mk270.github.io/whitakers-words/) and the Perseus Project's [Lewis & Short](https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059) dictionary, though with LatinCy-specific corrections and modifications.
+`latincy-lexicon` makes lexical data and morphological analysis available as spaCy pipeline components, designed for use with [LatinCy](https://huggingface.co/latincy) language models. It is based on [Whitaker's Words](https://mk270.github.io/whitakers-words/) and the Perseus Project's [Lewis & Short](https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059) dictionary, though with LatinCy-specific corrections and modifications; see [LICENSE](#license) below.
 
 ## Quick Start
 
@@ -208,8 +208,13 @@ This project is built on [**Whitaker's Words**](https://mk270.github.io/whitaker
 
 The WORDS data files used by this project are maintained at [mk270/whitakers-words](https://github.com/mk270/whitakers-words). Thank you to [Martin Keegan](https://mk270.github.io/whitakers-words/plan.html) for continuing Whitaker's work and sharing that work in the same spirit.
 
+Sense data has also been drawn from the Perseus Project's digitized version of Lewis & Short. Many thanks to Gregory Crane and the Perseus team for making that resource available for reuse.
+
 ## License
 
 The original Python code in this project is released under the [MIT License](LICENSE).
 
 The Whitaker's Words data and analysis logic incorporated in this project are copyright William A. Whitaker (1936–2010) and distributed under his original permissive license (see [LICENSE](LICENSE) for full text).
+
+Perseus Project's [Lewis & Short](https://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0059) dictionary is [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+
